@@ -1,9 +1,9 @@
 # Review365 — PR Review Kanban Board
 
 Dark-themed Kanban board for tracking GitHub PR reviews across all your repos.
-Supports **webhook-driven auto-column movement**.
+Poll-based — no webhook setup needed.
 
-**Stack:** SvelteKit + Cloudflare Pages + R2 + GitHub API + Webhooks
+**Stack:** SvelteKit + Cloudflare Pages + R2 + GitHub API
 
 ## Columns
 1. 📥 **To Review** — new PRs / new commits / review-requested
@@ -13,18 +13,12 @@ Supports **webhook-driven auto-column movement**.
 5. ✅ **Approved** — approved, ready to merge
 6. 🎉 **Merged** — done!
 
-## Webhook Auto-Move Rules
+## How It Works
 
-| GitHub Event | → Column |
-|-------------|----------|
-| PR opened | 📥 To Review |
-| `review_requested` @you | 📥 To Review |
-| New commit pushed (after changes) | 📥 To Review |
-| You approve someone's PR | ✅ Approved |
-| Someone approves your PR | ✅ Approved |
-| Changes requested | 🔄 Revisions |
-| PR merged | 🎉 Merged |
-| PR closed (not merged) | 🗑️ removed |
+- 🔄 Auto-refreshes every 30 seconds
+- 🖱️ Drag cards between columns (saved to R2)
+- 📊 PRs from ALL repos (user-level GitHub search)
+- 🟢 Own PRs marked with green badge
 
 ## Deployment (GitHub Integration)
 
@@ -41,22 +35,27 @@ Supports **webhook-driven auto-column movement**.
    - Variable: `BOARD_STATE` → Bucket: `review365-board-state`
 
 4. **Pages project** → Settings → Environment variables:
-   - `GITHUB_TOKEN` — GitHub PAT with `repo` scope
+   - `GITHUB_TOKEN` — GitHub fine-grained PAT (pull_requests:read + metadata:read)
    - `GITHUB_USER` — your GitHub username (e.g. `narze`)
-   - `GITHUB_WEBHOOK_SECRET` — random string for webhook verification
-
-5. **GitHub** → Settings → Webhooks → Add:
-   - URL: `https://your-project.pages.dev/api/webhook`
-   - Content type: `application/json`
-   - Events: **Pull request reviews** + **Pull requests**
-   - Secret: same as `GITHUB_WEBHOOK_SECRET`
 
 Done! Every `git push` auto-deploys. 🎉
+
+## Creating a GitHub Token
+
+👉 https://github.com/settings/tokens?type=beta
+
+| Field | Value |
+|-------|-------|
+| Name | `Review365` |
+| Expiration | Custom (e.g. 1 year) |
+| Repository access | All repositories |
+| Pull requests | Read-only |
+| Metadata | Read-only (auto) |
 
 ## Local Dev
 ```bash
 cp .env.example .env
-# edit .env with your GITHUB_TOKEN and GITHUB_USER
+# edit .env with GITHUB_TOKEN=... and GITHUB_USER=narze
 npm install
 npm run dev
 ```
