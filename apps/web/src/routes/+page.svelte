@@ -68,8 +68,33 @@
 
 	async function onReorderCard(cardId: string, targetCardId: string | null, column: ColumnId) {
 		cards = cards.map((c) =>
-			c.id === cardId ? { ...c, columnId: column, order: Date.now() } : c
+			c.id === cardId ? { ...c, columnId: column } : c
 		);
+
+		let colCards = cards
+			.filter((c) => c.columnId === column && !c.archived)
+			.sort((a, b) => a.order - b.order);
+
+		const movedIdx = colCards.findIndex((c) => c.id === cardId);
+		if (movedIdx >= 0) {
+			const [moved] = colCards.splice(movedIdx, 1);
+			let insertIdx = colCards.length;
+			if (targetCardId) {
+				const targetIdx = colCards.findIndex((c) => c.id === targetCardId);
+				if (targetIdx >= 0) insertIdx = targetIdx + 1;
+			}
+			colCards.splice(insertIdx, 0, moved);
+		}
+
+		const base = Date.now();
+		const orderMap = new Map<string, number>();
+		colCards.forEach((c, i) => orderMap.set(c.id, base + i));
+
+		cards = cards.map((c) => {
+			const o = orderMap.get(c.id);
+			return o != null ? { ...c, order: o } : c;
+		});
+
 		await rpc('board/reorderCard', { cardId, targetCardId, column });
 	}
 
