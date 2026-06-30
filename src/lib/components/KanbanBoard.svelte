@@ -10,21 +10,22 @@
 	}
 
 	async function onDrop(cardId: string, newColumn: ColumnId) {
+		// Optimistic update
+		const idx = cards.findIndex((c) => c.id === cardId);
+		if (idx >= 0) cards[idx] = { ...cards[idx], columnId: newColumn };
+		cards = cards;
+
 		await fetch('/api/board', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({ cardId, column: newColumn })
 		});
 	}
-
-	async function refresh() {
-		location.reload();
-	}
 </script>
 
 <div class="board-toolbar">
 	<h1>Review365</h1>
-	<button onclick={refresh}>🔄 Refresh</button>
+	<span class="subtitle">{cards.length} PRs across {COLUMNS.length} columns</span>
 </div>
 
 <div class="kanban-board">
@@ -40,8 +41,8 @@
 <style>
 	.board-toolbar {
 		display: flex;
-		align-items: center;
-		justify-content: space-between;
+		align-items: baseline;
+		gap: 12px;
 		padding: 16px 24px;
 		background: #161b22;
 		border-bottom: 1px solid #30363d;
@@ -51,17 +52,9 @@
 		margin: 0;
 		color: #f0f6fc;
 	}
-	.board-toolbar button {
-		background: #21262d;
-		border: 1px solid #30363d;
-		color: #c9d1d9;
-		padding: 6px 16px;
-		border-radius: 6px;
-		cursor: pointer;
-		font-size: 14px;
-	}
-	.board-toolbar button:hover {
-		background: #30363d;
+	.subtitle {
+		font-size: 13px;
+		color: #8b949e;
 	}
 	.kanban-board {
 		display: flex;

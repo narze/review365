@@ -14,6 +14,7 @@ interface Env {
 	BOARD_STATE: R2Bucket;
 	GITHUB_TOKEN: string;
 	GITHUB_USER: string;
+	GITHUB_WEBHOOK_SECRET: string;
 }
 
 export {};
