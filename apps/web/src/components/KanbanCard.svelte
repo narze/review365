@@ -11,15 +11,25 @@
 		onUnarchive?: (id: string) => void;
 	} = $props();
 
+	let expanded = $state(false);
+	let didDrag = false;
+
 	function handleDragStart(e: DragEvent) {
+		didDrag = false;
 		e.dataTransfer?.setData('text/plain', card.id);
 		const el = e.target as HTMLElement;
 		el.classList.add('dragging');
 	}
 
 	function handleDragEnd(e: DragEvent) {
+		didDrag = true;
 		const el = e.target as HTMLElement;
 		el.classList.remove('dragging');
+	}
+
+	function handleTitleClick() {
+		if (didDrag) return;
+		expanded = !expanded;
 	}
 
 	function timeAgo(dateStr: string): string {
@@ -41,8 +51,8 @@
 	ondragend={handleDragEnd}
 >
 	<div class="mb-1 text-xs font-medium text-blue-400">{card.repo}</div>
-	<div class="mb-2 line-clamp-2 text-sm text-neutral-100">
-		#{card.prNumber} {card.title}
+	<div class="mb-2 text-sm text-neutral-100 {expanded ? '' : 'line-clamp-2'} cursor-pointer" onclick={handleTitleClick}>
+		<span class="font-semibold text-blue-300">#{card.prNumber}</span> {card.title}
 	</div>
 	<div class="flex items-center justify-between text-xs text-neutral-400">
 		<span>{card.isOwnPR ? '🤖' : '👤'} {card.author}</span>
