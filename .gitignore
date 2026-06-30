@@ -56,3 +56,5 @@ tmp
 temp
 board.json
 board-config.json
+test-results/
+playwright-report/

@@ -19,7 +19,7 @@
   },
   "type": "module",
   "scripts": {
-		"dev": "vp run -r dev",
+    "dev": "vp run -r dev",
     "build": "vp run -r build",
     "check-types": "vp run -r check-types",
     "check": "vp check && vp run -r check-types",
@@ -35,6 +35,7 @@
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
     "@review365/config": "workspace:*",
     "@types/node": "catalog:",
     "rolldown": "1.1.0",
