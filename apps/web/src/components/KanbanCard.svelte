@@ -33,29 +33,36 @@
 </script>
 
 <div
-	class="group block rounded-lg border bg-neutral-900 p-3 transition-colors relative not-prose no-underline select-none {card.archived
+	class="group block rounded-lg border bg-neutral-900 p-3 transition-colors relative select-none {card.archived
 		? 'border-neutral-800 opacity-50'
 		: 'border-neutral-800 cursor-grab hover:border-blue-500 hover:shadow-[0_0_0_1px_rgba(88,166,255,0.2)]'}"
 	draggable={!card.archived}
 	ondragstart={handleDragStart}
 	ondragend={handleDragEnd}
 >
-	<a href={card.url} target="_blank" class="no-underline select-none">
-		<div class="mb-1 text-xs font-medium text-blue-400">{card.repo}</div>
-		<div class="mb-2 line-clamp-2 text-sm text-neutral-100">
-			#{card.prNumber} {card.title}
-		</div>
-		<div class="flex items-center justify-between text-xs text-neutral-400">
-			<span>{card.isOwnPR ? '🤖' : '👤'} {card.author}</span>
-			<span>{timeAgo(card.updatedAt)}</span>
-		</div>
-		{#if card.isOwnPR}
-			<span
-				class="absolute right-2 top-2 rounded bg-green-600 px-1.5 py-0.5 text-[10px] text-white"
-			>own</span
-			>
-		{/if}
+	<div class="mb-1 text-xs font-medium text-blue-400">{card.repo}</div>
+	<div class="mb-2 line-clamp-2 text-sm text-neutral-100">
+		#{card.prNumber} {card.title}
+	</div>
+	<div class="flex items-center justify-between text-xs text-neutral-400">
+		<span>{card.isOwnPR ? '🤖' : '👤'} {card.author}</span>
+		<span>{timeAgo(card.updatedAt)}</span>
+	</div>
+	<a
+		href={card.url}
+		target="_blank"
+		class="absolute right-2 top-2 rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] text-neutral-400 opacity-0 transition-opacity hover:bg-neutral-700 hover:text-neutral-200 group-hover:opacity-100"
+		title="Open PR"
+		onclick={(e) => e.stopPropagation()}
+	>
+		↗️
 	</a>
+	{#if card.isOwnPR}
+		<span
+			class="absolute right-2 top-7 rounded bg-green-600 px-1.5 py-0.5 text-[10px] text-white"
+		>own</span
+		>
+	{/if}
 	{#if onArchive && !card.archived}
 		<button
 			class="absolute bottom-2 right-2 rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] text-neutral-400 opacity-0 transition-opacity hover:bg-neutral-700 hover:text-neutral-200 group-hover:opacity-100"

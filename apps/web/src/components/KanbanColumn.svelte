@@ -86,7 +86,7 @@
 			>{visibleCards.length}</span
 		>
 	</div>
-	<div class="column-body flex flex-1 flex-col gap-2 overflow-y-auto p-2 select-none">
+	<div class="column-body flex flex-1 flex-col gap-2 overflow-y-auto p-2">
 		{#if isOver && dropTargetId === null}
 			<div class="h-0.5 rounded bg-blue-500" />
 		{/if}
