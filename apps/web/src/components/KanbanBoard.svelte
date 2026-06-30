@@ -24,7 +24,9 @@
 		onAddRule,
 		onDeleteRule,
 		onRefresh,
-		onReorderColumns
+		onReorderColumns,
+		mergedRetentionDays = 14,
+		onSetRetention
 	}: {
 		cards: PRCard[];
 		columns: ColumnDef[];
@@ -44,6 +46,8 @@
 		onDeleteRule: (id: string) => void;
 		onRefresh: () => void;
 		onReorderColumns: (ids: string[]) => void;
+		mergedRetentionDays: number;
+		onSetRetention: (days: number) => void;
 	} = $props();
 
 	let showSettings = $state(false);
@@ -168,6 +172,18 @@
 		<div class="mx-auto max-w-3xl grid gap-6">
 			<ColumnManager {columns} onAdd={onAddColumn} onRename={onRenameColumn} onDelete={onDeleteColumn} />
 			<RuleManager {columns} {rules} {signalLabels} onAdd={onAddRule} onDelete={onDeleteRule} />
+			<div class="flex items-center gap-3 rounded-lg border border-neutral-800 p-4">
+				<span class="text-sm text-neutral-300">Merged PR retention</span>
+				<input
+					type="number"
+					min="1"
+					max="90"
+					value={mergedRetentionDays}
+					onchange={(e) => onSetRetention(Number((e.target as HTMLInputElement).value))}
+					class="w-20 rounded-md border border-neutral-700 bg-neutral-800 px-2 py-1 text-sm text-neutral-100"
+				/>
+				<span class="text-xs text-neutral-500">days</span>
+			</div>
 		</div>
 	</div>
 {/if}

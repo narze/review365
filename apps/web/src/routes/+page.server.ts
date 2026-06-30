@@ -8,6 +8,7 @@ export async function load() {
 		enabledRepos: data.enabledRepos,
 		rules: data.rules,
 		orphans: data.orphans,
-		signalLabels: data.signalLabels
+		signalLabels: data.signalLabels,
+		mergedRetentionDays: data.mergedRetentionDays
 	};
 }

@@ -24,6 +24,7 @@ export interface AutomationRule {
 export interface BoardConfig {
 	columns: ColumnDef[];
 	rules: AutomationRule[];
+	mergedRetentionDays?: number;
 }
 
 export interface PRCard {
@@ -59,7 +60,8 @@ export const DEFAULT_CONFIG: BoardConfig = {
 		{ id: 'rule-changes-requested', signal: 'changes-requested', columnId: 'inbox' },
 		{ id: 'rule-review-requested', signal: 'review-requested', columnId: 'inbox' },
 		{ id: 'rule-pr-open', signal: 'pr-open', columnId: 'inbox' }
-	]
+	],
+	mergedRetentionDays: 14
 };
 
 export const SIGNAL_LABELS: Record<Signal, string> = {

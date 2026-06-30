@@ -114,9 +114,10 @@ export async function fetchPRs(
 	token: string,
 	user: string,
 	enabledRepos: string[] = [],
-	force = false
+	force = false,
+	mergedRetentionDays = 14
 ): Promise<PRCard[]> {
-	const cacheKey = `${user}:${enabledRepos.sort().join(',')}`;
+	const cacheKey = `${user}:${enabledRepos.sort().join(',')}:${mergedRetentionDays}`;
 
 	if (!force && prsCache && prsCache.key === cacheKey && Date.now() - prsCache.ts < PRS_TTL_MS) {
 		return prsCache.prs;
@@ -152,9 +153,9 @@ export async function fetchPRs(
 		}
 	}
 
-	// 3. Recently merged PRs (own, last 14 days)
-	const twoWeeksAgo = new Date(Date.now() - 14 * 86400000).toISOString().split('T')[0];
-	const mergedQuery = `is:pr is:merged author:${user} merged:>=${twoWeeksAgo}`;
+	// 3. Recently merged PRs (own, within configured retention)
+	const cutoff = new Date(Date.now() - mergedRetentionDays * 86400000).toISOString().split('T')[0];
+	const mergedQuery = `is:pr is:merged author:${user} merged:>=${cutoff}`;
 	const mergedResult = await ghFetch<GHSearchResponse>(
 		token,
 		`/search/issues?q=${encodeURIComponent(mergedQuery)}&per_page=20`

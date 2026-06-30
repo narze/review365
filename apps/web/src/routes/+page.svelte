@@ -14,13 +14,15 @@
 		rules: { id: string; signal: string; columnId: string }[];
 		orphans: { cardId: string; column: ColumnId }[];
 		signalLabels: Record<string, string>;
+		mergedRetentionDays: number;
 	} = {
 		cards: data.cards ?? [],
 		columns: data.columns ?? [],
 		enabledRepos: data.enabledRepos ?? [],
 		rules: data.rules ?? [],
 		orphans: data.orphans ?? [],
-		signalLabels: data.signalLabels ?? {}
+		signalLabels: data.signalLabels ?? {},
+		mergedRetentionDays: data.mergedRetentionDays ?? 14
 	};
 
 	let cards = $state<PRCard[]>(init.cards);
@@ -29,6 +31,7 @@
 	let rules = $state<{ id: string; signal: string; columnId: string }[]>(init.rules);
 	let orphans = $state<{ cardId: string; column: ColumnId }[]>(init.orphans);
 	let signalLabels = $state<Record<string, string>>(init.signalLabels);
+	let mergedRetentionDays = $state<number>(init.mergedRetentionDays);
 
 	async function refresh(force = false) {
 		try {
@@ -161,6 +164,11 @@
 		await rpcConfig('columns/reorder', { ids });
 	}
 
+	async function onSetRetention(days: number) {
+		mergedRetentionDays = days;
+		await rpc('config/retention', { days });
+	}
+
 	let interval: ReturnType<typeof setInterval>;
 	onMount(() => {
 		interval = setInterval(() => refresh(false), 5 * 60 * 1000);
@@ -186,5 +194,7 @@
 	{onAddRule}
 	{onDeleteRule}
 	{onReorderColumns}
+	{mergedRetentionDays}
+	{onSetRetention}
 	onRefresh={() => refresh(true)}
 />

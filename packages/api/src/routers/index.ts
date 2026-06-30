@@ -95,7 +95,16 @@ export const appRouter = {
 					await context.configStore.save(updated);
 					return updated;
 				})
-		}
+		},
+
+		retention: publicProcedure
+			.input(z.object({ days: z.number().min(1).max(90) }))
+			.handler(async ({ input, context }) => {
+				const config = await context.configStore.load();
+				config.mergedRetentionDays = input.days;
+				await context.configStore.save(config);
+				return config;
+			})
 	},
 
 	prs: {
@@ -107,7 +116,7 @@ export const appRouter = {
 				const config = await context.configStore.load();
 				const state = await context.store.load();
 
-				const prs = await fetchPRs(token, user, getEnabledRepos(state), input.force);
+				const prs = await fetchPRs(token, user, getEnabledRepos(state), input.force, config.mergedRetentionDays);
 
 			// Build signal map for automation
 			const cardSignals: Record<string, Signal[]> = {};
@@ -139,7 +148,8 @@ export const appRouter = {
 			enabledRepos: getEnabledRepos(automatedState),
 			rules: config.rules,
 			orphans,
-			signalLabels: SIGNAL_LABELS
+			signalLabels: SIGNAL_LABELS,
+			mergedRetentionDays: config.mergedRetentionDays ?? 14
 		};
 		})
 	},
