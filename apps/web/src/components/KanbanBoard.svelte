@@ -57,10 +57,6 @@
 		}
 	}
 
-	function handleWindowDragEnd() {
-		document.documentElement.classList.remove('select-none');
-	}
-
 	const repoCounts = $derived(
 		(() => {
 			const m = new SvelteMap<string, number>();
@@ -169,5 +165,3 @@
 </div>
 
 {/if}
-
-<svelte:window ondragend={handleWindowDragEnd} />

@@ -15,13 +15,11 @@
 		e.dataTransfer?.setData('text/plain', card.id);
 		const el = e.target as HTMLElement;
 		el.classList.add('dragging');
-		document.documentElement.classList.add('select-none');
 	}
 
 	function handleDragEnd(e: DragEvent) {
 		const el = e.target as HTMLElement;
 		el.classList.remove('dragging');
-		document.documentElement.classList.remove('select-none');
 	}
 
 	function timeAgo(dateStr: string): string {
@@ -35,14 +33,14 @@
 </script>
 
 <div
-	class="group block rounded-lg border bg-neutral-900 p-3 transition-colors relative not-prose no-underline {card.archived
+	class="group block rounded-lg border bg-neutral-900 p-3 transition-colors relative not-prose no-underline select-none {card.archived
 		? 'border-neutral-800 opacity-50'
 		: 'border-neutral-800 cursor-grab hover:border-blue-500 hover:shadow-[0_0_0_1px_rgba(88,166,255,0.2)]'}"
 	draggable={!card.archived}
 	ondragstart={handleDragStart}
 	ondragend={handleDragEnd}
 >
-	<a href={card.url} target="_blank" class="no-underline">
+	<a href={card.url} target="_blank" class="no-underline select-none">
 		<div class="mb-1 text-xs font-medium text-blue-400">{card.repo}</div>
 		<div class="mb-2 line-clamp-2 text-sm text-neutral-100">
 			#{card.prNumber} {card.title}
