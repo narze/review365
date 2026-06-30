@@ -1,30 +1,32 @@
-import { defineConfig } from 'vitest/config';
-import adapter from '@sveltejs/adapter-cloudflare';
-import { sveltekit } from '@sveltejs/kit/vite';
+import { defineConfig } from "vite-plus";
 
 export default defineConfig({
-	plugins: [
-		sveltekit({
-			compilerOptions: {
-				// Force runes mode for the project, except for libraries. Can be removed in svelte 6.
-				runes: ({ filename }) =>
-					filename.split(/[/\\]/).includes('node_modules') ? undefined : true
-			},
-			adapter: adapter()
-		})
-	],
-	test: {
-		expect: { requireAssertions: true },
-		projects: [
-			{
-				extends: './vite.config.ts',
-				test: {
-					name: 'server',
-					environment: 'node',
-					include: ['src/**/*.{test,spec}.{js,ts}'],
-					exclude: ['src/**/*.svelte.{test,spec}.{js,ts}']
-				}
-			}
-		]
-	}
+  lint: {
+    ignorePatterns: [
+      "node_modules/**",
+      "**/node_modules/**",
+      "apps/web/.svelte-kit/**",
+      "apps/web/build/**",
+      "apps/web/.output/**",
+    ],
+    options: {
+      typeAware: false,
+      typeCheck: false,
+    },
+  },
+  fmt: {
+    ignorePatterns: [
+      "node_modules/**",
+      "**/node_modules/**",
+      "apps/web/.svelte-kit/**",
+      "apps/web/build/**",
+      "apps/web/.output/**",
+    ],
+    singleQuote: false,
+    semi: true,
+    sortPackageJson: true,
+  },
+  staged: {
+    "*.{js,ts,jsx,tsx,vue,svelte,json,jsonc,css,md}": "vp check --fix",
+  },
 });
