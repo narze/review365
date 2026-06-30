@@ -60,13 +60,16 @@
 	}
 
 	async function onMoveCard(cardId: string, column: ColumnId) {
-		const idx = cards.findIndex((c) => c.id === cardId);
-		if (idx >= 0) cards[idx] = { ...cards[idx], columnId: column };
-		cards = cards;
+		cards = cards.map((c) =>
+			c.id === cardId ? { ...c, columnId: column, order: Date.now() } : c
+		);
 		await rpc('board/moveCard', { cardId, column });
 	}
 
 	async function onReorderCard(cardId: string, targetCardId: string | null, column: ColumnId) {
+		cards = cards.map((c) =>
+			c.id === cardId ? { ...c, columnId: column, order: Date.now() } : c
+		);
 		await rpc('board/reorderCard', { cardId, targetCardId, column });
 	}
 

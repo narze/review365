@@ -67,7 +67,8 @@ function toPRCard(pr: GHPR, isOwnPR: boolean, signals: Signal[] = []): PRCard {
 		isOwnPR,
 		columnId: 'inbox',
 		signals,
-		archived: false
+		archived: false,
+		order: 0
 	};
 }
 

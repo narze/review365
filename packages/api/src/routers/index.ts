@@ -127,7 +127,8 @@ export const appRouter = {
 		const cards = prs.map((pr) => ({
 			...pr,
 			columnId: getCardColumn(automatedState, pr.id),
-			archived: automatedState.cards[pr.id]?.archived ?? false
+			archived: automatedState.cards[pr.id]?.archived ?? false,
+			order: automatedState.cards[pr.id]?.order ?? Date.now()
 		}));
 
 		const orphans = findOrphanedCards(automatedState, config);

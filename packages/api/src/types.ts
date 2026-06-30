@@ -38,6 +38,7 @@ export interface PRCard {
 	columnId: ColumnId;
 	signals: Signal[];
 	archived: boolean;
+	order: number;
 }
 
 export interface BoardState {

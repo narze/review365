@@ -74,9 +74,7 @@
 	function cardsForColumn(columnId: ColumnId): PRCard[] {
 		return filteredCards
 			.filter((c) => c.columnId === columnId)
-			.sort((a, b) => {
-				return 0;
-			});
+			.sort((a, b) => a.order - b.order);
 	}
 
 	function orphanedCards(): PRCard[] {

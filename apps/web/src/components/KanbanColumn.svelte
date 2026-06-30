@@ -48,7 +48,12 @@
 			if (dropTargetId && dropTargetId !== cardId) {
 				onReorder(cardId, dropTargetId, col.id);
 			} else if (!dropTargetId) {
-				onDrop(cardId, col.id);
+				const cardInCol = visibleCards.some((c) => c.id === cardId);
+				if (cardInCol) {
+					onReorder(cardId, null, col.id);
+				} else {
+					onDrop(cardId, col.id);
+				}
 			}
 		}
 		dropTargetId = null;
