@@ -22,7 +22,8 @@
 		onRenameColumn,
 		onDeleteColumn,
 		onAddRule,
-		onDeleteRule
+		onDeleteRule,
+		onRefresh
 	}: {
 		cards: PRCard[];
 		columns: ColumnDef[];
@@ -40,10 +41,21 @@
 		onDeleteColumn: (id: string) => void;
 		onAddRule: (signal: string, columnId: string) => void;
 		onDeleteRule: (id: string) => void;
+		onRefresh: () => void;
 	} = $props();
 
 	let showSettings = $state(false);
 	let showArchived = $state(false);
+	let refreshing = $state(false);
+
+	async function handleRefresh() {
+		refreshing = true;
+		try {
+			await onRefresh();
+		} finally {
+			refreshing = false;
+		}
+	}
 
 	const repoCounts = $derived(
 		(() => {
@@ -91,7 +103,14 @@
 			📦 {archivedCount} archived {showArchived ? '(showing)' : '(hidden)'}
 		</button>
 	{/if}
-	<div class="ml-auto">
+	<div class="ml-auto flex gap-2">
+		<button
+			class="rounded-md border border-neutral-700 bg-neutral-800 px-3 py-1.5 text-sm text-neutral-100 transition-colors hover:border-blue-500 disabled:opacity-40"
+			disabled={refreshing}
+			onclick={handleRefresh}
+		>
+			{refreshing ? '⏳ Fetching...' : '🔄 Refresh'}
+		</button>
 		<button
 			class="rounded-md border border-neutral-700 bg-neutral-800 px-3 py-1.5 text-sm text-neutral-100 transition-colors hover:border-blue-500 {showSettings
 				? 'border-blue-500'

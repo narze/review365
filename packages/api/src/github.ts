@@ -33,16 +33,6 @@ interface GHReview {
 	submitted_at: string;
 }
 
-interface GHPullDetail {
-	merged: boolean;
-	merged_at: string | null;
-	state: 'open' | 'closed';
-	draft: boolean;
-}
-
-let orgsCache: { user: string; orgs: string[]; ts: number } | null = null;
-const ORGS_TTL_MS = 5 * 60 * 1000;
-
 function headers(token: string): HeadersInit {
 	return {
 		Authorization: `Bearer ${token}`,
@@ -81,6 +71,20 @@ function toPRCard(pr: GHPR, isOwnPR: boolean, signals: Signal[] = []): PRCard {
 	};
 }
 
+// === Caches ===
+
+const PRS_TTL_MS = 5 * 60 * 1000;
+let prsCache: { key: string; prs: PRCard[]; ts: number } | null = null;
+
+const ORGS_TTL_MS = 10 * 60 * 1000;
+let orgsCache: { user: string; orgs: string[]; ts: number } | null = null;
+
+const REVIEW_TTL_MS = 10 * 60 * 1000;
+const reviewCache = new Map<string, { reviews: GHReview[]; ts: number }>();
+
+const REPO_SEARCH_TTL_MS = 5 * 60 * 1000;
+const repoSearchCache = new Map<string, { repos: string[]; ts: number }>();
+
 async function fetchUserOrgs(token: string, user: string): Promise<string[]> {
 	if (orgsCache && orgsCache.user === user && Date.now() - orgsCache.ts < ORGS_TTL_MS) {
 		return orgsCache.orgs;
@@ -91,11 +95,32 @@ async function fetchUserOrgs(token: string, user: string): Promise<string[]> {
 	return logins;
 }
 
+async function fetchReviews(token: string, repo: string, prNumber: number): Promise<GHReview[]> {
+	const cacheKey = `${repo}/${prNumber}`;
+	const cached = reviewCache.get(cacheKey);
+	if (cached && Date.now() - cached.ts < REVIEW_TTL_MS) {
+		return cached.reviews;
+	}
+	const reviews = await ghFetch<GHReview[]>(
+		token,
+		`/repos/${repo}/pulls/${prNumber}/reviews?per_page=100`
+	);
+	reviewCache.set(cacheKey, { reviews, ts: Date.now() });
+	return reviews;
+}
+
 export async function fetchPRs(
 	token: string,
 	user: string,
-	enabledRepos: string[] = []
+	enabledRepos: string[] = [],
+	force = false
 ): Promise<PRCard[]> {
+	const cacheKey = `${user}:${enabledRepos.sort().join(',')}`;
+
+	if (!force && prsCache && prsCache.key === cacheKey && Date.now() - prsCache.ts < PRS_TTL_MS) {
+		return prsCache.prs;
+	}
+
 	const cardMap = new Map<string, PRCard & { signals: Signal[] }>();
 
 	// 1. PRs where user is requested as reviewer
@@ -142,12 +167,14 @@ export async function fetchPRs(
 		}
 	}
 
-	// 4. Fetch review status only for PRs in the watchlist (avoids N API calls for all PRs)
+	// 4. Fetch review status only for PRs in the watchlist
 	if (enabledRepos.length > 0) {
 		await enrichWithReviewSignals(token, cardMap, user, enabledRepos);
 	}
 
-	return [...cardMap.values()];
+	const prs = [...cardMap.values()];
+	prsCache = { key: cacheKey, prs, ts: Date.now() };
+	return prs;
 }
 
 async function enrichWithReviewSignals(
@@ -161,10 +188,7 @@ async function enrichWithReviewSignals(
 	);
 	for (const card of watchlisted) {
 		try {
-			const reviews = await ghFetch<GHReview[]>(
-				token,
-				`/repos/${card.repo}/pulls/${card.prNumber}/reviews?per_page=100`
-			);
+			const reviews = await fetchReviews(token, card.repo, card.prNumber);
 			const myReviews = reviews
 				.filter((r) => r.user?.login === user)
 				.sort((a, b) => a.submitted_at.localeCompare(b.submitted_at));
@@ -203,6 +227,12 @@ export async function fetchOwnedRepos(
 	user: string,
 	query: string
 ): Promise<string[]> {
+	const cacheKey = `${user}:${query}`;
+	const cached = repoSearchCache.get(cacheKey);
+	if (cached && Date.now() - cached.ts < REPO_SEARCH_TTL_MS) {
+		return cached.repos;
+	}
+
 	const orgs = await fetchUserOrgs(token, user);
 	const parts = [`user:${user}`, ...orgs.map((o) => `org:${o}`)];
 	if (query) parts.push(query);
@@ -211,5 +241,11 @@ export async function fetchOwnedRepos(
 		token,
 		`/search/repositories?q=${encodeURIComponent(q)}&per_page=100`
 	);
-	return res.items.filter((r) => !r.archived).map((r) => r.full_name);
+	const repos = res.items.filter((r) => !r.archived).map((r) => r.full_name);
+	repoSearchCache.set(cacheKey, { repos, ts: Date.now() });
+	return repos;
+}
+
+export function invalidatePrsCache() {
+	prsCache = null;
 }

@@ -99,13 +99,15 @@ export const appRouter = {
 	},
 
 	prs: {
-		list: publicProcedure.handler(async ({ context }) => {
-			const token = env.GITHUB_TOKEN;
-			const user = env.GITHUB_USER;
-			const config = await context.configStore.load();
-			const state = await context.store.load();
+		list: publicProcedure
+			.input(z.object({ force: z.boolean().default(false) }))
+			.handler(async ({ input, context }) => {
+				const token = env.GITHUB_TOKEN;
+				const user = env.GITHUB_USER;
+				const config = await context.configStore.load();
+				const state = await context.store.load();
 
-			const prs = await fetchPRs(token, user, getEnabledRepos(state));
+				const prs = await fetchPRs(token, user, getEnabledRepos(state), input.force);
 
 			// Build signal map for automation
 			const cardSignals: Record<string, Signal[]> = {};

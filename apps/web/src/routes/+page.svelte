@@ -12,9 +12,13 @@
 	let orphans = $state<{ cardId: string; column: ColumnId }[]>(data.orphans ?? []);
 	let signalLabels = $state<Record<string, string>>(data.signalLabels ?? {});
 
-	async function refresh() {
+	async function refresh(force = false) {
 		try {
-			const res = await fetch('/rpc/prs/list', { method: 'POST' });
+			const res = await fetch('/rpc/prs/list', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ json: { force } })
+			});
 			if (res.ok) {
 				const data = (await res.json()) as {
 					json: {
@@ -107,7 +111,7 @@
 
 	let interval: ReturnType<typeof setInterval>;
 	onMount(() => {
-		interval = setInterval(refresh, 30_000);
+		interval = setInterval(() => refresh(false), 5 * 60 * 1000);
 		return () => clearInterval(interval);
 	});
 </script>
@@ -129,4 +133,5 @@
 	{onDeleteColumn}
 	{onAddRule}
 	{onDeleteRule}
+	onRefresh={() => refresh(true)}
 />

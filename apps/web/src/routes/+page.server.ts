@@ -1,7 +1,7 @@
 import { client } from '$lib/orpc';
 
 export async function load() {
-	const data = await client.prs.list();
+	const data = await client.prs.list({ force: false });
 	return {
 		columns: data.columns,
 		cards: data.cards,
