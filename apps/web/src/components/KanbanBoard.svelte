@@ -57,6 +57,10 @@
 		}
 	}
 
+	function handleWindowDragEnd() {
+		document.documentElement.classList.remove('dragging-active');
+	}
+
 	const repoCounts = $derived(
 		(() => {
 			const m = new SvelteMap<string, number>();
@@ -161,6 +165,9 @@
 				onUnarchive={onUnarchiveCard}
 				{showArchived}
 			/>
-		{/if}
-	</div>
 {/if}
+</div>
+
+{/if}
+
+<svelte:window ondragend={handleWindowDragEnd} />
