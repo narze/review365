@@ -120,7 +120,15 @@ export async function fetchPRs(
 	const cacheKey = `${user}:${enabledRepos.sort().join(',')}:${mergedRetentionDays}`;
 
 	if (!force && prsCache && prsCache.key === cacheKey && Date.now() - prsCache.ts < PRS_TTL_MS) {
-		return prsCache.prs;
+		const prs = structuredClone(prsCache.prs);
+		if (enabledRepos.length > 0) {
+			const cardMap = new Map(prs.map((p) => [p.id, p]));
+			for (const pr of prs) {
+				pr.signals = pr.signals.filter((s) => s !== 'approved' && s !== 'changes-requested');
+			}
+			await enrichWithReviewSignals(token, cardMap, user, enabledRepos);
+		}
+		return prs;
 	}
 
 	const cardMap = new Map<string, PRCard & { signals: Signal[] }>();
