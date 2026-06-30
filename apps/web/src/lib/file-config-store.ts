@@ -3,7 +3,7 @@ import { createDefaultConfig } from '@review365/api/config';
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-const CONFIG_FILE = join(process.cwd(), '..', '..', 'board-config.json');
+const CONFIG_FILE = process.env.BOARD_CONFIG_FILE ?? join(process.cwd(), '..', '..', 'board-config.json');
 
 export class FileConfigStore implements ConfigStore {
 	async load(): Promise<BoardConfig> {
