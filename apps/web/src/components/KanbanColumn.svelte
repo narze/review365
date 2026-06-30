@@ -22,17 +22,18 @@
 
 	let isOver = $state(false);
 	let dropTargetId: string | null = $state(null);
+	let dropAbove: boolean = $state(false);
 
 	const visibleCards = $derived(
 		showArchived ? cards : cards.filter((c) => !c.archived)
 	);
 
-	function handleDragOver(e: DragEvent) {
+	function handleColumnDragOver(e: DragEvent) {
 		e.preventDefault();
 		isOver = true;
 	}
 
-	function handleDragLeave(e: DragEvent) {
+	function handleColumnDragLeave(e: DragEvent) {
 		const rt = e.relatedTarget as HTMLElement;
 		if (!rt || !rt.closest('.column-body')) {
 			isOver = false;
@@ -40,20 +41,18 @@
 		}
 	}
 
-	function handleDrop(e: DragEvent) {
+	function handleColumnDrop(e: DragEvent) {
 		e.preventDefault();
 		isOver = false;
 		const cardId = e.dataTransfer?.getData('text/plain');
 		if (cardId) {
-			if (dropTargetId && dropTargetId !== cardId) {
-				onReorder(cardId, dropTargetId, col.id);
-			} else if (!dropTargetId) {
-				const cardInCol = visibleCards.some((c) => c.id === cardId);
-				if (cardInCol) {
-					onReorder(cardId, null, col.id);
-				} else {
-					onDrop(cardId, col.id);
-				}
+			if (dropTargetId) {
+				const idx = visibleCards.findIndex((c) => c.id === dropTargetId);
+				const target = dropAbove ? dropTargetId : (idx < visibleCards.length - 1 ? visibleCards[idx + 1].id : null);
+				if (target === cardId) return;
+				onReorder(cardId, target, col.id);
+			} else {
+				onReorder(cardId, null, col.id);
 			}
 		}
 		dropTargetId = null;
@@ -62,8 +61,12 @@
 	function handleCardDragOver(e: DragEvent, cardId: string) {
 		e.preventDefault();
 		e.stopPropagation();
+		const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
 		dropTargetId = cardId;
+		dropAbove = (e.clientY - rect.top) < rect.height / 2;
 	}
+
+	function handleCardDragLeave() {}
 </script>
 
 <div
@@ -72,9 +75,9 @@
 		: 'border-neutral-800'}"
 	role="region"
 	aria-label={col.title}
-	ondragover={handleDragOver}
-	ondragleave={handleDragLeave}
-	ondrop={handleDrop}
+	ondragover={handleColumnDragOver}
+	ondragleave={handleColumnDragLeave}
+	ondrop={handleColumnDrop}
 >
 	<div class="flex items-center justify-between border-b border-neutral-800 px-4 py-3">
 		<span class="text-sm font-semibold text-neutral-100">{col.title}</span>
@@ -83,15 +86,18 @@
 		>
 	</div>
 	<div class="column-body flex flex-1 flex-col gap-2 overflow-y-auto p-2">
+		{#if isOver && dropTargetId === null}
+			<div class="h-0.5 rounded bg-blue-500" />
+		{/if}
 		{#each visibleCards as card (card.id)}
 			<div
 				ondragover={(e) => handleCardDragOver(e, card.id)}
-				ondragleave={() => {
-					if (dropTargetId === card.id) dropTargetId = null;
-				}}
-				class="rounded-md transition-all {dropTargetId === card.id
-					? 'ring-2 ring-blue-500 ring-offset-2 ring-offset-neutral-900'
-					: ''}"
+				ondragleave={handleCardDragLeave}
+				class="rounded-md transition-all {dropTargetId === card.id && dropAbove
+					? 'border-t-2 border-t-blue-500'
+					: dropTargetId === card.id && !dropAbove
+						? 'border-b-2 border-b-blue-500'
+						: ''}"
 			>
 				<KanbanCard {card} {onArchive} {onUnarchive} />
 			</div>

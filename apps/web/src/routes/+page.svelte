@@ -81,7 +81,7 @@
 			let insertIdx = colCards.length;
 			if (targetCardId) {
 				const targetIdx = colCards.findIndex((c) => c.id === targetCardId);
-				if (targetIdx >= 0) insertIdx = targetIdx + 1;
+				if (targetIdx >= 0) insertIdx = targetIdx;
 			}
 			colCards.splice(insertIdx, 0, moved);
 		}
