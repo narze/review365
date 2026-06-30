@@ -1,6 +1,12 @@
 import { json, type RequestEvent } from '@sveltejs/kit';
 import type { ColumnId, BoardState } from '$lib/types';
-import { loadBoardState, saveBoardState, setCardColumn } from '$lib/server/board';
+import {
+	loadBoardState,
+	saveBoardState,
+	setCardColumn,
+	toggleRepo,
+	setRepos
+} from '$lib/server/board';
 
 const BOARD_FILE = '.hermes/review365-board.json';
 
@@ -35,11 +41,21 @@ export async function GET({ platform }: RequestEvent) {
 
 export async function POST({ request, platform }: RequestEvent) {
 	const r2 = platform?.env?.BOARD_STATE;
-
-	const { cardId, column }: { cardId: string; column: ColumnId } = await request.json();
+	const body = (await request.json()) as
+		| { action: 'toggleRepo'; repo: string }
+		| { action: 'setRepos'; repos: string[] }
+		| { cardId: string; column: ColumnId };
 
 	const state = r2 ? await loadBoardState(r2) : await loadLocalBoard();
-	const updated = setCardColumn(state, cardId, column);
+	let updated: BoardState;
+
+	if ('action' in body && body.action === 'toggleRepo') {
+		updated = toggleRepo(state, body.repo);
+	} else if ('action' in body && body.action === 'setRepos') {
+		updated = setRepos(state, body.repos);
+	} else {
+		updated = setCardColumn(state, body.cardId, body.column);
+	}
 
 	if (r2) {
 		await saveBoardState(r2, updated);

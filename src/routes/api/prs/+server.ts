@@ -1,7 +1,7 @@
 import { json, type RequestEvent } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
 import { fetchPRs } from '$lib/server/github';
-import { loadBoardState, getCardColumn } from '$lib/server/board';
+import { loadBoardState, getCardColumn, getEnabledRepos } from '$lib/server/board';
 import { COLUMNS } from '$lib/types';
 
 export async function GET({ platform }: RequestEvent) {
@@ -19,7 +19,7 @@ export async function GET({ platform }: RequestEvent) {
 		columnId: getCardColumn(boardState, pr.id)
 	}));
 
-	return json({ columns: COLUMNS, cards });
+	return json({ columns: COLUMNS, cards, enabledRepos: getEnabledRepos(boardState) });
 }
 
 async function loadLocalBoard() {

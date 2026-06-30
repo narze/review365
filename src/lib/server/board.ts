@@ -26,3 +26,27 @@ export function setCardColumn(state: BoardState, cardId: string, column: ColumnI
 		}
 	};
 }
+
+export function getEnabledRepos(state: BoardState): string[] {
+	return state.enabledRepos ?? [];
+}
+
+export function toggleRepo(state: BoardState, repo: string): BoardState {
+	const current = getEnabledRepos(state);
+	const exists = current.includes(repo);
+	const enabledRepos = exists ? current.filter((r) => r !== repo) : [...current, repo];
+
+	const cards = { ...state.cards };
+	if (exists) {
+		const prefix = `pr_${repo.replace('/', '_')}_`;
+		for (const key of Object.keys(cards)) {
+			if (key.startsWith(prefix)) delete cards[key];
+		}
+	}
+
+	return { cards, enabledRepos };
+}
+
+export function setRepos(state: BoardState, repos: string[]): BoardState {
+	return { ...state, enabledRepos: repos };
+}

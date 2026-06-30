@@ -25,4 +25,13 @@ export interface PRCard {
 
 export interface BoardState {
 	cards: Record<string, { column: ColumnId; order: number }>;
+	enabledRepos?: string[];
+}
+
+export interface RepoInfo {
+	name: string;
+	fullName: string;
+	prCount: number;
+	watched: boolean;
+	stale: boolean;
 }
