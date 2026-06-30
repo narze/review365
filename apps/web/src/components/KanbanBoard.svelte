@@ -58,7 +58,7 @@
 	}
 
 	function handleWindowDragEnd() {
-		document.documentElement.classList.remove('dragging-active');
+		document.documentElement.classList.remove('select-none');
 	}
 
 	const repoCounts = $derived(

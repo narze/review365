@@ -15,13 +15,13 @@
 		e.dataTransfer?.setData('text/plain', card.id);
 		const el = e.target as HTMLElement;
 		el.classList.add('dragging');
-		document.documentElement.classList.add('dragging-active');
+		document.documentElement.classList.add('select-none');
 	}
 
 	function handleDragEnd(e: DragEvent) {
 		const el = e.target as HTMLElement;
 		el.classList.remove('dragging');
-		document.documentElement.classList.remove('dragging-active');
+		document.documentElement.classList.remove('select-none');
 	}
 
 	function timeAgo(dateStr: string): string {
@@ -83,12 +83,6 @@
 </div>
 
 <style>
-	:global(.dragging-active) {
-		user-select: none;
-	}
-	:global(.dragging-active *) {
-		user-select: none;
-	}
 	:global(.dragging) {
 		opacity: 0.5;
 		cursor: grabbing;
