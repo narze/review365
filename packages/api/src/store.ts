@@ -26,23 +26,26 @@ export function reorderCard(
 	column: ColumnId
 ): BoardState {
 	const cards = { ...state.cards };
+	const existing = cards[cardId];
+
 	const colCards = Object.entries(cards)
-		.filter(([_, c]) => c.column === column && !c.archived)
+		.filter(([id, c]) => c.column === column && !c.archived && id !== cardId)
 		.sort((a, b) => a[1].order - b[1].order);
 
-	const movedIdx = colCards.findIndex(([id]) => id === cardId);
-	if (movedIdx === -1) return state;
-
-	const [moved] = colCards.splice(movedIdx, 1);
-
+	let insertIdx = colCards.length;
 	if (targetCardId) {
 		const targetIdx = colCards.findIndex(([id]) => id === targetCardId);
-		colCards.splice(targetIdx, 0, moved);
-	} else {
-		colCards.push(moved);
+		if (targetIdx >= 0) insertIdx = targetIdx;
 	}
 
 	const now = Date.now();
+	const movedEntry: [string, typeof existing] = [
+		cardId,
+		{ ...existing, column, order: now, manual: true }
+	];
+
+	colCards.splice(insertIdx, 0, movedEntry);
+
 	colCards.forEach(([id], i) => {
 		cards[id] = { ...cards[id], column, order: now + i, manual: true };
 	});
