@@ -23,7 +23,8 @@
 		onDeleteColumn,
 		onAddRule,
 		onDeleteRule,
-		onRefresh
+		onRefresh,
+		onReorderColumns
 	}: {
 		cards: PRCard[];
 		columns: ColumnDef[];
@@ -42,11 +43,53 @@
 		onAddRule: (signal: string, columnId: string) => void;
 		onDeleteRule: (id: string) => void;
 		onRefresh: () => void;
+		onReorderColumns: (ids: string[]) => void;
 	} = $props();
 
 	let showSettings = $state(false);
 	let showArchived = $state(false);
 	let refreshing = $state(false);
+	let dragColId: string | null = $state(null);
+	let dropColTarget: string | null = $state(null);
+	let dropColBefore: boolean = $state(false);
+
+	function onColumnDragStart(colId: string) {
+		dragColId = colId;
+	}
+
+	function onColumnDragEnd() {
+		dragColId = null;
+		dropColTarget = null;
+	}
+
+	function handleColumnDragOver(e: DragEvent, colId: string) {
+		if (!e.dataTransfer?.types.includes('application/column-id')) return;
+		e.preventDefault();
+		dropColTarget = colId;
+		const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+		dropColBefore = (e.clientX - rect.left) < rect.width / 2;
+	}
+
+	function handleColumnDrop(e: DragEvent, colId: string) {
+		e.preventDefault();
+		const srcId = e.dataTransfer?.getData('application/column-id');
+		if (!srcId || srcId === colId) return;
+		const idx = columns.findIndex((c) => c.id === colId);
+		let insertIdx = idx;
+		if (!dropColBefore && idx < columns.length - 1) insertIdx = idx + 1;
+		const reordered = [...columns];
+		const srcIdx = reordered.findIndex((c) => c.id === srcId);
+		if (srcIdx >= 0) {
+			const [moved] = reordered.splice(srcIdx, 1);
+			// adjust insertIdx if srcIdx was before it
+			if (srcIdx < insertIdx) insertIdx--;
+			reordered.splice(insertIdx, 0, moved);
+		}
+		const ids = reordered.map((c) => c.id);
+		onReorderColumns(ids);
+		dropColTarget = null;
+		dragColId = null;
+	}
 
 	async function handleRefresh() {
 		refreshing = true;
@@ -141,15 +184,30 @@
 {:else}
 	<div class="flex min-h-[calc(100vh-65px)] items-start gap-4 overflow-x-auto p-6">
 		{#each columns as col (col.id)}
-			<KanbanColumn
-				{col}
-				cards={cardsForColumn(col.id)}
-				onDrop={onMoveCard}
-				onReorder={onReorderCard}
-				onArchive={onArchiveCard}
-				onUnarchive={onUnarchiveCard}
-				{showArchived}
-			/>
+			<div
+				ondragover={(e) => handleColumnDragOver(e, col.id)}
+				ondragleave={() => {
+					if (dropColTarget === col.id) dropColTarget = null;
+				}}
+				ondrop={(e) => handleColumnDrop(e, col.id)}
+				class="rounded-xl transition-all {dropColTarget === col.id
+					? dropColBefore
+						? 'border-l-4 border-l-blue-500'
+						: 'border-r-4 border-r-blue-500'
+					: ''}"
+			>
+				<KanbanColumn
+					{col}
+					cards={cardsForColumn(col.id)}
+					onDrop={onMoveCard}
+					onReorder={onReorderCard}
+					onArchive={onArchiveCard}
+					onUnarchive={onUnarchiveCard}
+					{showArchived}
+					onColumnDragStart={() => onColumnDragStart(col.id)}
+					onColumnDragEnd={onColumnDragEnd}
+				/>
+			</div>
 		{/each}
 		{#if orphanedCards().length > 0}
 			<KanbanColumn

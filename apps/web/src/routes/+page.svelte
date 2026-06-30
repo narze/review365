@@ -137,6 +137,12 @@
 		await rpcConfig('rules/delete', { id });
 	}
 
+	async function onReorderColumns(ids: string[]) {
+		const map = new Map(columns.map((c) => [c.id, c]));
+		columns = ids.map((id) => map.get(id)!).filter(Boolean);
+		await rpcConfig('columns/reorder', { ids });
+	}
+
 	let interval: ReturnType<typeof setInterval>;
 	onMount(() => {
 		interval = setInterval(() => refresh(false), 5 * 60 * 1000);
@@ -161,5 +167,6 @@
 	{onDeleteColumn}
 	{onAddRule}
 	{onDeleteRule}
+	{onReorderColumns}
 	onRefresh={() => refresh(true)}
 />

@@ -10,7 +10,9 @@
 		onReorder,
 		onArchive,
 		onUnarchive,
-		showArchived = false
+		showArchived = false,
+		onColumnDragStart,
+		onColumnDragEnd
 	}: {
 		col: ColumnDef;
 		cards: PRCard[];
@@ -19,6 +21,8 @@
 		onArchive?: (id: string) => void;
 		onUnarchive?: (id: string) => void;
 		showArchived?: boolean;
+		onColumnDragStart?: () => void;
+		onColumnDragEnd?: () => void;
 	} = $props();
 
 	let isOver = $state(false);
@@ -82,9 +86,26 @@
 >
 	<div class="flex items-center justify-between border-b border-neutral-800 px-4 py-3">
 		<span class="text-sm font-semibold text-neutral-100">{col.title}</span>
-		<span class="rounded-full bg-neutral-800 px-2 py-0.5 text-xs text-neutral-400"
-			>{visibleCards.length}</span
-		>
+		<span class="flex items-center gap-2">
+			<span class="rounded-full bg-neutral-800 px-2 py-0.5 text-xs text-neutral-400"
+				>{visibleCards.length}</span
+			>
+			{#if onColumnDragStart}
+				<button
+					draggable="true"
+					ondragstart={(e) => {
+						e.dataTransfer?.setData('application/column-id', col.id);
+						e.dataTransfer!.effectAllowed = 'move';
+						onColumnDragStart();
+					}}
+					ondragend={onColumnDragEnd}
+					class="cursor-grab text-xs text-neutral-600 hover:text-neutral-400 active:cursor-grabbing"
+					title="Drag to reorder"
+				>
+					⠿
+				</button>
+			{/if}
+		</span>
 	</div>
 	<div class="column-body flex flex-1 flex-col gap-2 overflow-y-auto p-2">
 		{#if isOver && dropTargetId === null}
