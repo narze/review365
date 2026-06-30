@@ -57,7 +57,7 @@ Bucket name: review365-board-state
 
 ### 3. Cloudflare Workers Build (Git Integration)
 
-1. Go to **Cloudflare Dashboard** → **Workers & Pages** → **Create** → **Workers** → connect to Git → `narze/review365`
+1. Go to **Cloudflare Dashboard** → **Workers & Pages** → **Create** → **Workers** → connect to Git → `yourname/review365`
 2. Set:
    - **Build command:** `npm run build`
    - **Deploy command:** `npm run deploy`
@@ -70,7 +70,7 @@ In the Workers project → **Settings** → **Variables and Secrets**:
 | Variable | Value | Type |
 |----------|-------|------|
 | `GITHUB_TOKEN` | your classic PAT (`ghp_...` or `gho_...`) | **Secret** |
-| `GITHUB_USER` | your GitHub username (e.g. `narze`) | Text |
+| `GITHUB_USER` | your GitHub username (e.g. `yourname`) | Text |
 
 ### 5. R2 Binding
 
@@ -86,7 +86,7 @@ To prevent public access:
 
 1. Go to **[Cloudflare Zero Trust](https://one.dash.cloudflare.com/)** → choose a team name (free for up to 50 users)
 2. **Access** → **Applications** → **Add application** → **Self-hosted**
-3. **Application domain:** `review365.narze.workers.dev`
+3. **Application domain:** `review365.yourname.workers.dev`
 4. Create policy:
    - **Name:** `Only me`
    - **Action:** Allow
@@ -102,7 +102,7 @@ Now only your email can access the site; everyone else gets redirected to Cloudf
 ```bash
 # .env file (gitignored):
 #   GITHUB_TOKEN=ghp_...  (or gho_... from gh auth token)
-#   GITHUB_USER=narze
+#   GITHUB_USER=yourname
 
 npm install
 npm run dev          # vite dev server (http://localhost:5173)
