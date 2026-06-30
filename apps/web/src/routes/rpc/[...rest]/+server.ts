@@ -5,6 +5,8 @@ import { RPCHandler } from "@orpc/server/fetch";
 import { ZodToJsonSchemaConverter } from "@orpc/zod/zod4";
 import { createContext } from "@review365/api/context";
 import { appRouter } from "@review365/api/routers/index";
+import { fileBoardStore } from "$lib/file-store";
+import { fileConfigStore } from "$lib/file-config-store";
 import type { RequestHandler } from "@sveltejs/kit";
 
 const rpcHandler = new RPCHandler(appRouter, {
@@ -31,6 +33,8 @@ const apiHandler = new OpenAPIHandler(appRouter, {
 const handle: RequestHandler = async ({ request }) => {
   const context = await createContext({
     headers: request.headers,
+    store: fileBoardStore,
+    configStore: fileConfigStore,
   });
 
   const rpcResult = await rpcHandler.handle(request, {

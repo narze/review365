@@ -1,42 +1,119 @@
 <script lang="ts">
-import { orpc } from "$lib/orpc";
-import { createQuery } from "@tanstack/svelte-query";
-const healthCheck = createQuery(orpc.healthCheck.queryOptions());
+	import KanbanBoard from '../components/KanbanBoard.svelte';
+	import { onMount } from 'svelte';
+	import type { PRCard, ColumnId, ColumnDef } from '@review365/api/types';
 
-const TITLE_TEXT = `
-   ██████╗ ███████╗████████╗████████╗███████╗██████╗
-   ██╔══██╗██╔════╝╚══██╔══╝╚══██╔══╝██╔════╝██╔══██╗
-   ██████╔╝█████╗     ██║      ██║   █████╗  ██████╔╝
-   ██╔══██╗██╔══╝     ██║      ██║   ██╔══╝  ██╔══██╗
-   ██████╔╝███████╗   ██║      ██║   ███████╗██║  ██║
-   ╚═════╝ ╚══════╝   ╚═╝      ╚═╝   ╚══════╝╚═╝  ╚═╝
+	let { data } = $props();
 
-   ████████╗    ███████╗████████╗ █████╗  ██████╗██╗  ██╗
-   ╚══██╔══╝    ██╔════╝╚══██╔══╝██╔══██╗██╔════╝██║ ██╔╝
-      ██║       ███████╗   ██║   ███████║██║     █████╔╝
-      ██║       ╚════██║   ██║   ██╔══██║██║     ██╔═██╗
-      ██║       ███████║   ██║   ██║  ██║╚██████╗██║  ██╗
-      ╚═╝       ╚══════╝   ╚═╝   ╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝
-   `;
+	let cards = $state<PRCard[]>(data.cards ?? []);
+	let columns = $state<ColumnDef[]>(data.columns ?? []);
+	let enabledRepos = $state<string[]>(data.enabledRepos ?? []);
+	let rules = $state<{ id: string; signal: string; columnId: string }[]>(data.rules ?? []);
+	let orphans = $state<{ cardId: string; column: ColumnId }[]>(data.orphans ?? []);
+	let signalLabels = $state<Record<string, string>>(data.signalLabels ?? {});
+
+	async function refresh() {
+		try {
+			const res = await fetch('/rpc/prs/list', { method: 'POST' });
+			if (res.ok) {
+				const data = (await res.json()) as {
+					json: {
+						cards: PRCard[];
+						columns: ColumnDef[];
+						enabledRepos: string[];
+						rules: { id: string; signal: string; columnId: string }[];
+						orphans: { cardId: string; column: ColumnId }[];
+						signalLabels: Record<string, string>;
+					};
+				};
+				cards = data.json.cards ?? [];
+				columns = data.json.columns ?? columns;
+				enabledRepos = data.json.enabledRepos ?? [];
+				rules = data.json.rules ?? rules;
+				orphans = data.json.orphans ?? [];
+			}
+		} catch {
+			// ignore
+		}
+	}
+
+	async function onToggleRepo(repo: string) {
+		const wasEnabled = enabledRepos.includes(repo);
+		enabledRepos = wasEnabled ? enabledRepos.filter((r) => r !== repo) : [...enabledRepos, repo];
+		if (wasEnabled) {
+			const prefix = `pr_${repo.replace('/', '_')}_`;
+			cards = cards.filter((c) => !c.id.startsWith(prefix));
+		}
+		await fetch('/rpc/board/toggleRepo', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ json: { repo } })
+		});
+	}
+
+	async function onMoveCard(cardId: string, column: ColumnId) {
+		const idx = cards.findIndex((c) => c.id === cardId);
+		if (idx >= 0) cards[idx] = { ...cards[idx], columnId: column };
+		cards = cards;
+		await fetch('/rpc/board/moveCard', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ json: { cardId, column } })
+		});
+	}
+
+	async function rpcConfig(path: string, body: unknown) {
+		const res = await fetch(`/rpc/config/${path}`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ json: body })
+		});
+		if (res.ok) {
+			const data = (await res.json()) as { json: { columns: ColumnDef[]; rules: unknown[] } };
+			columns = data.json.columns;
+			rules = data.json.rules as typeof rules;
+		}
+	}
+
+	async function onAddColumn(title: string) {
+		await rpcConfig('columns/add', { title });
+	}
+
+	async function onRenameColumn(id: string, title: string) {
+		await rpcConfig('columns/rename', { id, title });
+	}
+
+	async function onDeleteColumn(id: string) {
+		await rpcConfig('columns/delete', { id });
+	}
+
+	async function onAddRule(signal: string, columnId: string) {
+		await rpcConfig('rules/add', { signal, columnId });
+	}
+
+	async function onDeleteRule(id: string) {
+		await rpcConfig('rules/delete', { id });
+	}
+
+	let interval: ReturnType<typeof setInterval>;
+	onMount(() => {
+		interval = setInterval(refresh, 30_000);
+		return () => clearInterval(interval);
+	});
 </script>
 
-<div class="container mx-auto max-w-3xl px-4 py-2">
-	<pre class="overflow-x-auto font-mono text-sm">{TITLE_TEXT}</pre>
-	<div class="grid gap-6">
-		<section class="rounded-lg border p-4">
-			<h2 class="mb-2 font-medium">API Status</h2>
-			<div class="flex items-center gap-2">
-				<div
-					class={`h-2 w-2 rounded-full ${$healthCheck.data ? "bg-green-500" : "bg-red-500"}`}
-				></div>
-				<span class="text-muted-foreground text-sm">
-					{$healthCheck.isLoading
-						? "Checking..."
-						: $healthCheck.data
-							? "Connected"
-							: "Disconnected"}
-				</span>
-			</div>
-		</section>
-	</div>
-</div>
+<KanbanBoard
+	{cards}
+	{columns}
+	{enabledRepos}
+	{rules}
+	{orphans}
+	{signalLabels}
+	{onToggleRepo}
+	{onMoveCard}
+	{onAddColumn}
+	{onRenameColumn}
+	{onDeleteColumn}
+	{onAddRule}
+	{onDeleteRule}
+/>
