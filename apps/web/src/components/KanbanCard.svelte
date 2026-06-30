@@ -49,9 +49,18 @@
 	draggable={!card.archived}
 	ondragstart={handleDragStart}
 	ondragend={handleDragEnd}
+	role="listitem"
 >
 	<div class="mb-1 text-xs font-medium text-blue-400">{card.repo}</div>
-	<div class="mb-2 text-sm text-neutral-100 {expanded ? '' : 'line-clamp-2'} cursor-pointer" onclick={handleTitleClick}>
+	<div
+		class="mb-2 text-sm text-neutral-100 {expanded ? '' : 'line-clamp-2'} cursor-pointer"
+		role="button"
+		tabindex="0"
+		onclick={handleTitleClick}
+		onkeydown={(e) => {
+			if (e.key === 'Enter' || e.key === ' ') handleTitleClick();
+		}}
+	>
 		<span class="font-semibold text-blue-300">#{card.prNumber}</span> {card.title}
 	</div>
 	<div class="flex items-center justify-between text-xs text-neutral-400">

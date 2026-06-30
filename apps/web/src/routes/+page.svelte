@@ -5,12 +5,30 @@
 
 	let { data } = $props();
 
-	let cards = $state<PRCard[]>(data.cards ?? []);
-	let columns = $state<ColumnDef[]>(data.columns ?? []);
-	let enabledRepos = $state<string[]>(data.enabledRepos ?? []);
-	let rules = $state<{ id: string; signal: string; columnId: string }[]>(data.rules ?? []);
-	let orphans = $state<{ cardId: string; column: ColumnId }[]>(data.orphans ?? []);
-	let signalLabels = $state<Record<string, string>>(data.signalLabels ?? {});
+	// Initial values from SSR data; managed as mutable state thereafter
+	// svelte-ignore state_referenced_locally
+	const init: {
+		cards: PRCard[];
+		columns: ColumnDef[];
+		enabledRepos: string[];
+		rules: { id: string; signal: string; columnId: string }[];
+		orphans: { cardId: string; column: ColumnId }[];
+		signalLabels: Record<string, string>;
+	} = {
+		cards: data.cards ?? [],
+		columns: data.columns ?? [],
+		enabledRepos: data.enabledRepos ?? [],
+		rules: data.rules ?? [],
+		orphans: data.orphans ?? [],
+		signalLabels: data.signalLabels ?? {}
+	};
+
+	let cards = $state<PRCard[]>(init.cards);
+	let columns = $state<ColumnDef[]>(init.columns);
+	let enabledRepos = $state<string[]>(init.enabledRepos);
+	let rules = $state<{ id: string; signal: string; columnId: string }[]>(init.rules);
+	let orphans = $state<{ cardId: string; column: ColumnId }[]>(init.orphans);
+	let signalLabels = $state<Record<string, string>>(init.signalLabels);
 
 	async function refresh(force = false) {
 		try {

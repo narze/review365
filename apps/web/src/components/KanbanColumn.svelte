@@ -109,10 +109,11 @@
 	</div>
 	<div class="column-body flex flex-1 flex-col gap-2 overflow-y-auto p-2">
 		{#if isOver && dropTargetId === null}
-			<div class="h-0.5 rounded bg-blue-500" />
+			<div class="h-0.5 rounded bg-blue-500"></div>
 		{/if}
 		{#each visibleCards as card (card.id)}
 			<div
+				role="listitem"
 				animate:flip={{ duration: 300 }}
 				ondragover={(e) => handleCardDragOver(e, card.id)}
 				ondragleave={handleCardDragLeave}
