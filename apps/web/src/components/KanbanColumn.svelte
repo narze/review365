@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { flip } from 'svelte/animate';
 	import type { PRCard, ColumnId, ColumnDef } from '@review365/api/types';
 	import KanbanCard from './KanbanCard.svelte';
 
@@ -91,6 +92,7 @@
 		{/if}
 		{#each visibleCards as card (card.id)}
 			<div
+				animate:flip
 				ondragover={(e) => handleCardDragOver(e, card.id)}
 				ondragleave={handleCardDragLeave}
 				class="rounded-md transition-all {dropTargetId === card.id && dropAbove
