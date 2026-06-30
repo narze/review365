@@ -111,9 +111,11 @@ export function applyAutomation(
 	const updated = { ...state, cards: { ...state.cards } };
 
 	for (const [cardId, signals] of Object.entries(cardSignals)) {
+		if (updated.cards[cardId]?.archived) continue;
 		for (const rule of rules) {
 			if (signals.includes(rule.signal)) {
 				updated.cards[cardId] = {
+					...updated.cards[cardId],
 					column: rule.columnId,
 					order: updated.cards[cardId]?.order ?? Date.now()
 				};
