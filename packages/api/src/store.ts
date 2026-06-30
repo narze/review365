@@ -66,7 +66,7 @@ export function archiveCard(state: BoardState, cardId: string): BoardState {
 export function unarchiveCard(state: BoardState, cardId: string): BoardState {
 	const card = state.cards[cardId];
 	if (!card) return state;
-	const { archived, ...rest } = card;
+	const { archived: _archived, ...rest } = card;
 	return {
 		...state,
 		cards: {

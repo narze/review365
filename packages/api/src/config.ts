@@ -1,4 +1,4 @@
-import type { BoardConfig, ColumnDef, AutomationRule, Signal } from './types';
+import type { BoardConfig, AutomationRule, Signal } from './types';
 import { DEFAULT_CONFIG } from './types';
 
 export type { BoardConfig };

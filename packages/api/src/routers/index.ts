@@ -21,8 +21,7 @@ import {
 	deleteColumn,
 	reorderColumns,
 	addRule,
-	deleteRule,
-	createDefaultConfig
+	deleteRule
 } from '../config';
 import { SIGNAL_LABELS } from '../types';
 import type { Signal, ColumnId } from '../types';
