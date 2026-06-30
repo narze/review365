@@ -5,29 +5,59 @@
 	let {
 		col,
 		cards,
-		onDrop
+		onDrop,
+		onReorder,
+		onArchive,
+		onUnarchive,
+		showArchived = false
 	}: {
 		col: ColumnDef;
 		cards: PRCard[];
 		onDrop: (cardId: string, column: ColumnId) => void;
+		onReorder: (cardId: string, targetCardId: string | null, column: ColumnId) => void;
+		onArchive?: (id: string) => void;
+		onUnarchive?: (id: string) => void;
+		showArchived?: boolean;
 	} = $props();
 
 	let isOver = $state(false);
+	let dropTargetId: string | null = $state(null);
+
+	const visibleCards = $derived(
+		showArchived ? cards : cards.filter((c) => !c.archived)
+	);
 
 	function handleDragOver(e: DragEvent) {
 		e.preventDefault();
 		isOver = true;
 	}
 
-	function handleDragLeave() {
-		isOver = false;
+	function handleDragLeave(e: DragEvent) {
+		const rt = e.relatedTarget as HTMLElement;
+		if (!rt || !rt.closest('.column-body')) {
+			isOver = false;
+			dropTargetId = null;
+		}
 	}
 
 	function handleDrop(e: DragEvent) {
 		e.preventDefault();
 		isOver = false;
 		const cardId = e.dataTransfer?.getData('text/plain');
-		if (cardId) onDrop(cardId, col.id);
+		if (cardId) {
+			if (dropTargetId && dropTargetId !== cardId) {
+				onReorder(cardId, dropTargetId, col.id);
+			} else if (!dropTargetId) {
+				onDrop(cardId, col.id);
+			}
+		}
+		dropTargetId = null;
+	}
+
+	function handleCardDragOver(e: DragEvent, cardId: string) {
+		e.preventDefault();
+		e.stopPropagation();
+		dropTargetId = cardId;
 	}
 </script>
 
@@ -43,15 +73,25 @@
 >
 	<div class="flex items-center justify-between border-b border-neutral-800 px-4 py-3">
 		<span class="text-sm font-semibold text-neutral-100">{col.title}</span>
-		<span
-			class="rounded-full bg-neutral-800 px-2 py-0.5 text-xs text-neutral-400"
-		>{cards.length}</span>
+		<span class="rounded-full bg-neutral-800 px-2 py-0.5 text-xs text-neutral-400"
+			>{visibleCards.length}</span
+		>
 	</div>
-	<div class="flex flex-1 flex-col gap-2 overflow-y-auto p-2">
-		{#each cards as card (card.id)}
-			<KanbanCard {card} />
+	<div class="column-body flex flex-1 flex-col gap-2 overflow-y-auto p-2">
+		{#each visibleCards as card (card.id)}
+			<div
+				ondragover={(e) => handleCardDragOver(e, card.id)}
+				ondragleave={() => {
+					if (dropTargetId === card.id) dropTargetId = null;
+				}}
+				class="rounded-md transition-all {dropTargetId === card.id
+					? 'ring-2 ring-blue-500 ring-offset-2 ring-offset-neutral-900'
+					: ''}"
+			>
+				<KanbanCard {card} {onArchive} {onUnarchive} />
+			</div>
 		{/each}
-		{#if cards.length === 0}
+		{#if visibleCards.length === 0}
 			<div class="py-6 text-center text-sm text-neutral-600">No PRs</div>
 		{/if}
 	</div>

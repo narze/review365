@@ -37,6 +37,14 @@
 		}
 	}
 
+	async function rpc(path: string, body: unknown) {
+		return fetch(`/rpc/${path}`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ json: body })
+		});
+	}
+
 	async function onToggleRepo(repo: string) {
 		const wasEnabled = enabledRepos.includes(repo);
 		enabledRepos = wasEnabled ? enabledRepos.filter((r) => r !== repo) : [...enabledRepos, repo];
@@ -44,30 +52,32 @@
 			const prefix = `pr_${repo.replace('/', '_')}_`;
 			cards = cards.filter((c) => !c.id.startsWith(prefix));
 		}
-		await fetch('/rpc/board/toggleRepo', {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ json: { repo } })
-		});
+		await rpc('board/toggleRepo', { repo });
 	}
 
 	async function onMoveCard(cardId: string, column: ColumnId) {
 		const idx = cards.findIndex((c) => c.id === cardId);
 		if (idx >= 0) cards[idx] = { ...cards[idx], columnId: column };
 		cards = cards;
-		await fetch('/rpc/board/moveCard', {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ json: { cardId, column } })
-		});
+		await rpc('board/moveCard', { cardId, column });
+	}
+
+	async function onReorderCard(cardId: string, targetCardId: string | null, column: ColumnId) {
+		await rpc('board/reorderCard', { cardId, targetCardId, column });
+	}
+
+	async function onArchiveCard(cardId: string) {
+		cards = cards.map((c) => (c.id === cardId ? { ...c, archived: true } : c));
+		await rpc('board/archiveCard', { cardId });
+	}
+
+	async function onUnarchiveCard(cardId: string) {
+		cards = cards.map((c) => (c.id === cardId ? { ...c, archived: false } : c));
+		await rpc('board/unarchiveCard', { cardId });
 	}
 
 	async function rpcConfig(path: string, body: unknown) {
-		const res = await fetch(`/rpc/config/${path}`, {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ json: body })
-		});
+		const res = await rpc(`config/${path}`, body);
 		if (res.ok) {
 			const data = (await res.json()) as { json: { columns: ColumnDef[]; rules: unknown[] } };
 			columns = data.json.columns;
@@ -111,6 +121,9 @@
 	{signalLabels}
 	{onToggleRepo}
 	{onMoveCard}
+	{onReorderCard}
+	{onArchiveCard}
+	{onUnarchiveCard}
 	{onAddColumn}
 	{onRenameColumn}
 	{onDeleteColumn}

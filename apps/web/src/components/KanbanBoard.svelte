@@ -15,6 +15,9 @@
 		signalLabels = {},
 		onToggleRepo,
 		onMoveCard,
+		onReorderCard,
+		onArchiveCard,
+		onUnarchiveCard,
 		onAddColumn,
 		onRenameColumn,
 		onDeleteColumn,
@@ -29,6 +32,9 @@
 		signalLabels: Record<string, string>;
 		onToggleRepo: (repo: string) => void;
 		onMoveCard: (cardId: string, column: ColumnId) => void;
+		onReorderCard: (cardId: string, targetCardId: string | null, column: ColumnId) => void;
+		onArchiveCard: (id: string) => void;
+		onUnarchiveCard: (id: string) => void;
 		onAddColumn: (title: string) => void;
 		onRenameColumn: (id: string, title: string) => void;
 		onDeleteColumn: (id: string) => void;
@@ -37,6 +43,7 @@
 	} = $props();
 
 	let showSettings = $state(false);
+	let showArchived = $state(false);
 
 	const repoCounts = $derived(
 		(() => {
@@ -50,8 +57,14 @@
 		enabledRepos.length === 0 ? [] : cards.filter((c) => enabledRepos.includes(c.repo))
 	);
 
+	const archivedCount = $derived(filteredCards.filter((c) => c.archived).length);
+
 	function cardsForColumn(columnId: ColumnId): PRCard[] {
-		return filteredCards.filter((c) => c.columnId === columnId);
+		return filteredCards
+			.filter((c) => c.columnId === columnId)
+			.sort((a, b) => {
+				return 0;
+			});
 	}
 
 	function orphanedCards(): PRCard[] {
@@ -68,6 +81,16 @@
 			? 'Select repos to view →'
 			: `${filteredCards.length} of ${cards.length} PRs across ${columns.length} columns`}
 	</span>
+	{#if archivedCount > 0}
+		<button
+			class="rounded-md border border-neutral-700 bg-neutral-800 px-2.5 py-1 text-xs text-neutral-300 transition-colors hover:border-blue-500 {showArchived
+				? 'border-blue-500'
+				: ''}"
+			onclick={() => (showArchived = !showArchived)}
+		>
+			📦 {archivedCount} archived {showArchived ? '(showing)' : '(hidden)'}
+		</button>
+	{/if}
 	<div class="ml-auto">
 		<button
 			class="rounded-md border border-neutral-700 bg-neutral-800 px-3 py-1.5 text-sm text-neutral-100 transition-colors hover:border-blue-500 {showSettings
@@ -101,13 +124,25 @@
 {:else}
 	<div class="flex min-h-[calc(100vh-65px)] items-start gap-4 overflow-x-auto p-6">
 		{#each columns as col (col.id)}
-			<KanbanColumn {col} cards={cardsForColumn(col.id)} onDrop={onMoveCard} />
+			<KanbanColumn
+				{col}
+				cards={cardsForColumn(col.id)}
+				onDrop={onMoveCard}
+				onReorder={onReorderCard}
+				onArchive={onArchiveCard}
+				onUnarchive={onUnarchiveCard}
+				{showArchived}
+			/>
 		{/each}
 		{#if orphanedCards().length > 0}
 			<KanbanColumn
 				col={{ id: '__orphaned__', title: '👻 Orphaned' }}
 				cards={orphanedCards()}
 				onDrop={onMoveCard}
+				onReorder={onReorderCard}
+				onArchive={onArchiveCard}
+				onUnarchive={onUnarchiveCard}
+				{showArchived}
 			/>
 		{/if}
 	</div>

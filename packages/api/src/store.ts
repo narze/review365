@@ -14,7 +14,61 @@ export function setCardColumn(state: BoardState, cardId: string, column: ColumnI
 		...state,
 		cards: {
 			...state.cards,
-			[cardId]: { column, order: Date.now() }
+			[cardId]: { ...state.cards[cardId], column, order: Date.now() }
+		}
+	};
+}
+
+export function reorderCard(
+	state: BoardState,
+	cardId: string,
+	targetCardId: string | null,
+	column: ColumnId
+): BoardState {
+	const cards = { ...state.cards };
+	const colCards = Object.entries(cards)
+		.filter(([_, c]) => c.column === column && !c.archived)
+		.sort((a, b) => a[1].order - b[1].order);
+
+	const movedIdx = colCards.findIndex(([id]) => id === cardId);
+	if (movedIdx === -1) return state;
+
+	const [moved] = colCards.splice(movedIdx, 1);
+
+	if (targetCardId) {
+		const targetIdx = colCards.findIndex(([id]) => id === targetCardId);
+		colCards.splice(targetIdx, 0, moved);
+	} else {
+		colCards.push(moved);
+	}
+
+	const now = Date.now();
+	colCards.forEach(([id], i) => {
+		cards[id] = { ...cards[id], column, order: now + i };
+	});
+
+	return { ...state, cards };
+}
+
+export function archiveCard(state: BoardState, cardId: string): BoardState {
+	return {
+		...state,
+		cards: {
+			...state.cards,
+			[cardId]: { ...state.cards[cardId], archived: true }
+		}
+	};
+}
+
+export function unarchiveCard(state: BoardState, cardId: string): BoardState {
+	const card = state.cards[cardId];
+	if (!card) return state;
+	const { archived, ...rest } = card;
+	return {
+		...state,
+		cards: {
+			...state.cards,
+			[cardId]: rest
 		}
 	};
 }

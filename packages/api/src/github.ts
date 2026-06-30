@@ -76,7 +76,8 @@ function toPRCard(pr: GHPR, isOwnPR: boolean, signals: Signal[] = []): PRCard {
 		updatedAt: pr.updated_at,
 		isOwnPR,
 		columnId: 'inbox',
-		signals
+		signals,
+		archived: false
 	};
 }
 
@@ -105,7 +106,7 @@ export async function fetchPRs(
 	);
 	for (const pr of reviewResult.items) {
 		const id = prKey(pr);
-		const signals: Signal[] = ['review-requested'];
+		const signals: Signal[] = ['pr-open', 'review-requested'];
 		if (pr.draft) signals.push('draft');
 		cardMap.set(id, { ...toPRCard(pr, false), signals });
 	}
@@ -119,7 +120,7 @@ export async function fetchPRs(
 	for (const pr of ownResult.items) {
 		const id = prKey(pr);
 		if (!cardMap.has(id)) {
-			const signals: Signal[] = ['own-pr'];
+			const signals: Signal[] = ['pr-open', 'own-pr'];
 			if (pr.draft) signals.push('draft');
 			cardMap.set(id, { ...toPRCard(pr, true), signals });
 		}

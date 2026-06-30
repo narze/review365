@@ -10,7 +10,10 @@ import {
 	getEnabledRepos,
 	toggleRepo,
 	applyAutomation,
-	findOrphanedCards
+	findOrphanedCards,
+	reorderCard,
+	archiveCard,
+	unarchiveCard
 } from '../store';
 import {
 	addColumn,
@@ -119,21 +122,22 @@ export const appRouter = {
 				await context.store.save(automatedState);
 			}
 
-			const cards = prs.map((pr) => ({
-				...pr,
-				columnId: getCardColumn(automatedState, pr.id)
-			}));
+		const cards = prs.map((pr) => ({
+			...pr,
+			columnId: getCardColumn(automatedState, pr.id),
+			archived: automatedState.cards[pr.id]?.archived ?? false
+		}));
 
-			const orphans = findOrphanedCards(automatedState, config);
+		const orphans = findOrphanedCards(automatedState, config);
 
-			return {
-				columns: config.columns,
-				cards,
-				enabledRepos: getEnabledRepos(automatedState),
-				rules: config.rules,
-				orphans,
-				signalLabels: SIGNAL_LABELS
-			};
+		return {
+			columns: config.columns,
+			cards,
+			enabledRepos: getEnabledRepos(automatedState),
+			rules: config.rules,
+			orphans,
+			signalLabels: SIGNAL_LABELS
+		};
 		})
 	},
 
@@ -172,6 +176,44 @@ export const appRouter = {
 			.handler(async ({ input, context }) => {
 				const state = await context.store.load();
 				const updated = toggleRepo(state, input.repo);
+				await context.store.save(updated);
+				return updated;
+			}),
+
+		reorderCard: publicProcedure
+			.input(
+				z.object({
+					cardId: z.string(),
+					targetCardId: z.string().nullable(),
+					column: z.string()
+				})
+			)
+			.handler(async ({ input, context }) => {
+				const state = await context.store.load();
+				const updated = reorderCard(
+					state,
+					input.cardId,
+					input.targetCardId,
+					input.column as ColumnId
+				);
+				await context.store.save(updated);
+				return updated;
+			}),
+
+		archiveCard: publicProcedure
+			.input(z.object({ cardId: z.string() }))
+			.handler(async ({ input, context }) => {
+				const state = await context.store.load();
+				const updated = archiveCard(state, input.cardId);
+				await context.store.save(updated);
+				return updated;
+			}),
+
+		unarchiveCard: publicProcedure
+			.input(z.object({ cardId: z.string() }))
+			.handler(async ({ input, context }) => {
+				const state = await context.store.load();
+				const updated = unarchiveCard(state, input.cardId);
 				await context.store.save(updated);
 				return updated;
 			})

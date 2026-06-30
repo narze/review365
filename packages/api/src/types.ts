@@ -1,6 +1,7 @@
 export type ColumnId = string;
 
 export type Signal =
+	| 'pr-open'
 	| 'review-requested'
 	| 'own-pr'
 	| 'draft'
@@ -36,10 +37,11 @@ export interface PRCard {
 	isOwnPR: boolean;
 	columnId: ColumnId;
 	signals: Signal[];
+	archived: boolean;
 }
 
 export interface BoardState {
-	cards: Record<string, { column: ColumnId; order: number }>;
+	cards: Record<string, { column: ColumnId; order: number; archived?: boolean }>;
 	enabledRepos?: string[];
 }
 
@@ -53,11 +55,14 @@ export const DEFAULT_CONFIG: BoardConfig = {
 	rules: [
 		{ id: 'rule-merged', signal: 'merged', columnId: 'merged' },
 		{ id: 'rule-approved', signal: 'approved', columnId: 'approved' },
-		{ id: 'rule-review-requested', signal: 'review-requested', columnId: 'inbox' }
+		{ id: 'rule-changes-requested', signal: 'changes-requested', columnId: 'inbox' },
+		{ id: 'rule-review-requested', signal: 'review-requested', columnId: 'inbox' },
+		{ id: 'rule-pr-open', signal: 'pr-open', columnId: 'inbox' }
 	]
 };
 
 export const SIGNAL_LABELS: Record<Signal, string> = {
+	'pr-open': 'PR Open',
 	'review-requested': 'Review Requested',
 	'own-pr': 'Own PR',
 	'draft': 'Draft',
