@@ -1,0 +1,13 @@
+{
+	"$schema": "./node_modules/wrangler/config-schema.json",
+	"name": "review365",
+	"compatibility_date": "2026-06-30",
+	"compatibility_flags": ["nodejs_als"],
+	"pages_build_output_dir": ".svelte-kit/cloudflare",
+	"r2_buckets": [
+		{
+			"binding": "BOARD_STATE",
+			"bucket_name": "review365-board-state"
+		}
+	]
+}
