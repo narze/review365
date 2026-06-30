@@ -14,7 +14,7 @@ export function setCardColumn(state: BoardState, cardId: string, column: ColumnI
 		...state,
 		cards: {
 			...state.cards,
-			[cardId]: { ...state.cards[cardId], column, order: Date.now() }
+			[cardId]: { ...state.cards[cardId], column, order: Date.now(), manual: true }
 		}
 	};
 }
@@ -44,7 +44,7 @@ export function reorderCard(
 
 	const now = Date.now();
 	colCards.forEach(([id], i) => {
-		cards[id] = { ...cards[id], column, order: now + i };
+		cards[id] = { ...cards[id], column, order: now + i, manual: true };
 	});
 
 	return { ...state, cards };
@@ -112,6 +112,7 @@ export function applyAutomation(
 
 	for (const [cardId, signals] of Object.entries(cardSignals)) {
 		if (updated.cards[cardId]?.archived) continue;
+		if (updated.cards[cardId]?.manual) continue;
 		for (const rule of rules) {
 			if (signals.includes(rule.signal)) {
 				updated.cards[cardId] = {

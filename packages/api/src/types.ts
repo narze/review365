@@ -42,7 +42,7 @@ export interface PRCard {
 }
 
 export interface BoardState {
-	cards: Record<string, { column: ColumnId; order: number; archived?: boolean }>;
+	cards: Record<string, { column: ColumnId; order: number; archived?: boolean; manual?: boolean }>;
 	enabledRepos?: string[];
 }
 

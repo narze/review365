@@ -92,7 +92,7 @@
 		{/if}
 		{#each visibleCards as card (card.id)}
 			<div
-				animate:flip
+				animate:flip={{ duration: 300 }}
 				ondragover={(e) => handleCardDragOver(e, card.id)}
 				ondragleave={handleCardDragLeave}
 				class="rounded-md transition-all {dropTargetId === card.id && dropAbove
