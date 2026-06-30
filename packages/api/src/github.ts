@@ -152,8 +152,9 @@ export async function fetchPRs(
 		}
 	}
 
-	// 3. Recently merged PRs (own)
-	const mergedQuery = `is:pr is:merged author:${user}`;
+	// 3. Recently merged PRs (own, last 14 days)
+	const twoWeeksAgo = new Date(Date.now() - 14 * 86400000).toISOString().split('T')[0];
+	const mergedQuery = `is:pr is:merged author:${user} merged:>=${twoWeeksAgo}`;
 	const mergedResult = await ghFetch<GHSearchResponse>(
 		token,
 		`/search/issues?q=${encodeURIComponent(mergedQuery)}&per_page=20`
