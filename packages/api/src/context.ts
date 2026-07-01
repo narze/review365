@@ -1,5 +1,5 @@
-import type { BoardStore } from './store';
-import type { ConfigStore } from './config';
+import type { BoardStore } from "./store";
+import type { ConfigStore } from "./config";
 
 export type CreateContextOptions = {
   headers: Headers;
