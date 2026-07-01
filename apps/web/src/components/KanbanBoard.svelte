@@ -57,6 +57,19 @@
 	let dropColTarget: string | null = $state(null);
 	let dropColBefore: boolean = $state(false);
 
+	type SortMode = 'default' | 'pr-asc' | 'pr-desc' | 'age-asc' | 'age-desc';
+	let columnSorts = $state<Map<ColumnId, SortMode>>(new Map());
+
+	function onSortColumn(colId: ColumnId, mode: SortMode) {
+		const next = new Map(columnSorts);
+		if (mode === 'default') {
+			next.delete(colId);
+		} else {
+			next.set(colId, mode);
+		}
+		columnSorts = next;
+	}
+
 	function onColumnDragStart(colId: string) {
 		dragColId = colId;
 	}
@@ -119,9 +132,25 @@
 	const archivedCount = $derived(filteredCards.filter((c) => c.archived).length);
 
 	function cardsForColumn(columnId: ColumnId): PRCard[] {
-		return filteredCards
-			.filter((c) => c.columnId === columnId)
-			.sort((a, b) => a.order - b.order);
+		const cols = filteredCards.filter((c) => c.columnId === columnId);
+		const mode = columnSorts.get(columnId);
+		if (!mode || mode === 'default') {
+			return cols.sort((a, b) => a.order - b.order);
+		}
+		switch (mode) {
+			case 'pr-asc':
+				return cols.sort((a, b) => a.prNumber - b.prNumber);
+			case 'pr-desc':
+				return cols.sort((a, b) => b.prNumber - a.prNumber);
+			case 'age-asc':
+				return cols.sort(
+					(a, b) => new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime()
+				);
+			case 'age-desc':
+				return cols.sort(
+					(a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+				);
+		}
 	}
 
 	function orphanedCards(): PRCard[] {
@@ -223,6 +252,8 @@
 					{showArchived}
 					onColumnDragStart={() => onColumnDragStart(col.id)}
 					onColumnDragEnd={onColumnDragEnd}
+					sortMode={columnSorts.get(col.id) ?? 'default'}
+					onSort={(mode) => onSortColumn(col.id, mode as SortMode)}
 				/>
 			</div>
 		{/each}

@@ -3,6 +3,14 @@
 	import type { PRCard, ColumnId, ColumnDef } from '@review365/api/types';
 	import KanbanCard from './KanbanCard.svelte';
 
+	const SORT_OPTIONS = [
+		{ value: 'default', label: 'Drag order' },
+		{ value: 'pr-asc', label: 'PR Number ↑' },
+		{ value: 'pr-desc', label: 'PR Number ↓' },
+		{ value: 'age-asc', label: 'Oldest First' },
+		{ value: 'age-desc', label: 'Newest First' }
+	] as const;
+
 	let {
 		col,
 		cards,
@@ -12,7 +20,9 @@
 		onUnarchive,
 		showArchived = false,
 		onColumnDragStart,
-		onColumnDragEnd
+		onColumnDragEnd,
+		sortMode = 'default',
+		onSort = () => {}
 	}: {
 		col: ColumnDef;
 		cards: PRCard[];
@@ -23,11 +33,27 @@
 		showArchived?: boolean;
 		onColumnDragStart?: () => void;
 		onColumnDragEnd?: () => void;
+		sortMode?: string;
+		onSort?: (mode: string) => void;
 	} = $props();
 
 	let isOver = $state(false);
 	let dropTargetId: string | null = $state(null);
 	let dropAbove: boolean = $state(false);
+	let sortOpen = $state(false);
+	let sortBtnEl: HTMLButtonElement | undefined = $state();
+
+	const activeSortLabel = $derived(
+		SORT_OPTIONS.find((o) => o.value === sortMode)?.label ?? 'Sort'
+	);
+
+	function closeSortDropdown() {
+		sortOpen = false;
+	}
+
+	function handleSortKeydown(e: KeyboardEvent) {
+		if (e.key === 'Escape') closeSortDropdown();
+	}
 
 	const visibleCards = $derived(
 		showArchived ? cards : cards.filter((c) => !c.archived)
@@ -90,6 +116,51 @@
 			<span class="rounded-full bg-neutral-800 px-2 py-0.5 text-xs text-neutral-400"
 				>{visibleCards.length}</span
 			>
+			<div class="relative">
+				<button
+					bind:this={sortBtnEl}
+					onclick={() => (sortOpen = !sortOpen)}
+					class="cursor-pointer rounded px-1 text-xs transition-colors {sortMode !== 'default'
+						? 'text-blue-400 hover:text-blue-300'
+						: 'text-neutral-600 hover:text-neutral-400'}"
+					title={activeSortLabel}
+				>
+					{sortMode === 'default'
+						? '⇅'
+						: sortMode === 'pr-asc'
+							? '#↑'
+							: sortMode === 'pr-desc'
+								? '#↓'
+								: sortMode === 'age-asc'
+									? '🕐↑'
+									: '🕐↓'}
+				</button>
+				{#if sortOpen}
+					<button
+						class="fixed inset-0 z-10 cursor-default"
+						onclick={closeSortDropdown}
+					></button>
+					<div
+						class="absolute right-0 top-full z-20 mt-1 w-36 rounded-lg border border-neutral-700 bg-neutral-800 py-1 shadow-xl"
+						onkeydown={handleSortKeydown}
+					>
+						{#each SORT_OPTIONS as opt}
+							<button
+								onclick={() => {
+									onSort(opt.value);
+									closeSortDropdown();
+								}}
+								class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs transition-colors hover:bg-neutral-700 {opt.value === sortMode
+									? 'text-blue-400'
+									: 'text-neutral-300'}"
+							>
+								<span class="w-4 text-center">{opt.value === sortMode ? '✓' : ''}</span>
+								<span>{opt.label}</span>
+							</button>
+						{/each}
+					</div>
+				{/if}
+			</div>
 			{#if onColumnDragStart}
 				<button
 					draggable="true"
