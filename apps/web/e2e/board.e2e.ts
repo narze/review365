@@ -22,12 +22,15 @@ test.describe('Review365', () => {
 		await page.locator('button', { hasText: 'Settings' }).click();
 		await page.getByPlaceholder('New column title...').waitFor({ state: 'visible', timeout: 5000 });
 
+		// Use a unique name to avoid conflicts with leftover state from previous runs
+		const colName = `E2ETest-${Date.now()}`;
+
 		// Add column via settings panel
-		await page.getByPlaceholder('New column title...').fill('Testing');
+		await page.getByPlaceholder('New column title...').fill(colName);
 		await page.getByPlaceholder('New column title...').press('Enter');
 
-		// Column title should appear as a span in the settings column list
-		const titleSpan = page.locator('span', { hasText: 'Testing' });
+		// Column title should appear as a span in the settings column list (flex-1 class distinguishes it from board header)
+		const titleSpan = page.locator('span.flex-1', { hasText: colName });
 		await expect(titleSpan).toBeVisible({ timeout: 3000 });
 
 		// Delete: find the container div and click its Delete button
