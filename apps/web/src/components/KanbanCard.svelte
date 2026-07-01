@@ -71,7 +71,7 @@
 	ondragend={handleDragEnd}
 	role="listitem"
 >
-	<div class="mb-1 text-xs font-medium text-blue-400">{card.repo}</div>
+	<div class="mb-1 text-xs font-medium text-blue-400">{card.repo} <span class="text-blue-300">#{card.prNumber}</span></div>
 	<div
 		class="mb-1.5 text-sm text-neutral-100 {expanded ? '' : 'line-clamp-2'} cursor-pointer"
 		role="button"
@@ -81,7 +81,7 @@
 			if (e.key === 'Enter' || e.key === ' ') handleTitleClick();
 		}}
 	>
-		<span class="font-semibold text-blue-300">#{card.prNumber}</span> {card.title}
+		{card.title}
 	</div>
 	{#if card.signals.length > 0}
 		<div class="mb-1.5 flex flex-wrap gap-1">
