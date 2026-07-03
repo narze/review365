@@ -3,6 +3,7 @@ import type { BoardState, AutomationRule } from "./types";
 import {
   getCardColumn,
   setCardColumn,
+  updateNote,
   reorderCard,
   archiveCard,
   unarchiveCard,
@@ -126,6 +127,29 @@ describe("reorderCard", () => {
   });
 });
 
+// ── updateNote ──
+
+describe("updateNote", () => {
+  it("sets note on card", () => {
+    const s = stateWith("pr_a", "inbox");
+    const result = updateNote(s, "pr_a", "check this one");
+    expect(result.cards["pr_a"].note).toBe("check this one");
+  });
+
+  it("truncates note over 200 chars", () => {
+    const s = stateWith("pr_a", "inbox");
+    const longNote = "a".repeat(250);
+    const result = updateNote(s, "pr_a", longNote);
+    expect(result.cards["pr_a"].note?.length).toBe(200);
+  });
+
+  it("removes note when set to empty string", () => {
+    const s = stateWith("pr_a", "inbox", 10, { note: "old note" });
+    const result = updateNote(s, "pr_a", "");
+    expect(result.cards["pr_a"].note).toBeUndefined();
+  });
+});
+
 // ── archive / unarchive ──
 
 describe("archiveCard", () => {
@@ -236,11 +260,18 @@ describe("applyAutomation", () => {
     expect(result.cards["pr_a"].column).toBe("inbox");
   });
 
-  it("skips manually placed cards", () => {
+  it("skips manually placed cards for non-merged signals", () => {
     const s = stateWith("pr_a", "reviewing", 10, { manual: true });
     const signals = { pr_a: ["approved"] };
     const result = applyAutomation(s, signals, rules);
     expect(result.cards["pr_a"].column).toBe("reviewing");
+  });
+
+  it("overrides manual placement for merged signal", () => {
+    const s = stateWith("pr_a", "reviewing", 10, { manual: true });
+    const signals = { pr_a: ["merged"] };
+    const result = applyAutomation(s, signals, rules);
+    expect(result.cards["pr_a"].column).toBe("merged");
   });
 
   it("does not modify state when no rules match", () => {

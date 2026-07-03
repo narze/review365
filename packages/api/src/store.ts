@@ -53,6 +53,17 @@ export function reorderCard(
   return { ...state, cards };
 }
 
+export function updateNote(state: BoardState, cardId: string, note: string): BoardState {
+  if (note.length > 200) note = note.slice(0, 200);
+  return {
+    ...state,
+    cards: {
+      ...state.cards,
+      [cardId]: { ...state.cards[cardId], note: note || undefined },
+    },
+  };
+}
+
 export function archiveCard(state: BoardState, cardId: string): BoardState {
   return {
     ...state,
@@ -115,8 +126,9 @@ export function applyAutomation(
 
   for (const [cardId, signals] of Object.entries(cardSignals)) {
     if (updated.cards[cardId]?.archived) continue;
-    if (updated.cards[cardId]?.manual) continue;
+    const isManual = updated.cards[cardId]?.manual;
     for (const rule of rules) {
+      if (isManual && rule.signal !== "merged") continue;
       if (signals.includes(rule.signal)) {
         updated.cards[cardId] = {
           ...updated.cards[cardId],
