@@ -18,6 +18,7 @@
 		onReorderCard,
 		onArchiveCard,
 		onUnarchiveCard,
+		onUpdateNote,
 		onAddColumn,
 		onRenameColumn,
 		onDeleteColumn,
@@ -39,6 +40,7 @@
 		onReorderCard: (cardId: string, targetCardId: string | null, column: ColumnId) => void;
 		onArchiveCard: (id: string) => void;
 		onUnarchiveCard: (id: string) => void;
+		onUpdateNote: (cardId: string, note: string) => void;
 		onAddColumn: (title: string) => void;
 		onRenameColumn: (id: string, title: string) => void;
 		onDeleteColumn: (id: string) => void;
@@ -249,6 +251,7 @@
 					onReorder={onReorderCard}
 					onArchive={onArchiveCard}
 					onUnarchive={onUnarchiveCard}
+					onUpdateNote={onUpdateNote}
 					{showArchived}
 					onColumnDragStart={() => onColumnDragStart(col.id)}
 					onColumnDragEnd={onColumnDragEnd}
@@ -265,6 +268,7 @@
 				onReorder={onReorderCard}
 				onArchive={onArchiveCard}
 				onUnarchive={onUnarchiveCard}
+				onUpdateNote={onUpdateNote}
 				{showArchived}
 			/>
 {/if}

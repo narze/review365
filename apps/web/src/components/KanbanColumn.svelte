@@ -3,6 +3,8 @@
 	import type { PRCard, ColumnId, ColumnDef } from '@review365/api/types';
 	import KanbanCard from './KanbanCard.svelte';
 
+	type SortMode = 'default' | 'pr-asc' | 'pr-desc' | 'age-asc' | 'age-desc';
+
 	const SORT_OPTIONS = [
 		{ value: 'default', label: 'Drag order' },
 		{ value: 'pr-asc', label: 'PR Number ↑' },
@@ -18,6 +20,7 @@
 		onReorder,
 		onArchive,
 		onUnarchive,
+		onUpdateNote,
 		showArchived = false,
 		onColumnDragStart,
 		onColumnDragEnd,
@@ -30,11 +33,12 @@
 		onReorder: (cardId: string, targetCardId: string | null, column: ColumnId) => void;
 		onArchive?: (id: string) => void;
 		onUnarchive?: (id: string) => void;
+		onUpdateNote?: (cardId: string, note: string) => void;
 		showArchived?: boolean;
 		onColumnDragStart?: () => void;
 		onColumnDragEnd?: () => void;
-		sortMode?: string;
-		onSort?: (mode: string) => void;
+		sortMode?: SortMode;
+		onSort?: (mode: SortMode) => void;
 	} = $props();
 
 	let isOver = $state(false);
@@ -194,7 +198,7 @@
 						? 'border-b-2 border-b-blue-500'
 						: ''}"
 			>
-				<KanbanCard {card} {onArchive} {onUnarchive} />
+				<KanbanCard {card} {onArchive} {onUnarchive} {onUpdateNote} />
 			</div>
 		{/each}
 		{#if visibleCards.length === 0}

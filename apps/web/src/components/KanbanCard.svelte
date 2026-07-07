@@ -4,17 +4,26 @@
 	let {
 		card,
 		onArchive,
-		onUnarchive
+		onUnarchive,
+		onUpdateNote
 	}: {
 		card: PRCard;
 		onArchive?: (id: string) => void;
 		onUnarchive?: (id: string) => void;
+		onUpdateNote?: (cardId: string, note: string) => void;
 	} = $props();
 
 	let expanded = $state(false);
 	let didDrag = false;
+	let editingNote = $state(false);
+	let noteDraft = $state('');
+	let noteInput: HTMLInputElement | undefined = $state();
 
 	function handleDragStart(e: DragEvent) {
+		if (editingNote) {
+			e.preventDefault();
+			return;
+		}
 		didDrag = false;
 		e.dataTransfer?.setData('text/plain', card.id);
 		const el = e.target as HTMLElement;
@@ -30,6 +39,21 @@
 	function handleTitleClick() {
 		if (didDrag) return;
 		expanded = !expanded;
+	}
+
+	function startEditNote() {
+		if (!onUpdateNote) return;
+		editingNote = true;
+		noteDraft = card.note ?? '';
+	}
+
+	function saveNote() {
+		editingNote = false;
+		onUpdateNote?.(card.id, noteDraft.trim());
+	}
+
+	function cancelNote() {
+		editingNote = false;
 	}
 
 	function timeAgo(dateStr: string): string {
@@ -94,6 +118,45 @@
 				{/if}
 			{/each}
 		</div>
+	{/if}
+	{#if onUpdateNote}
+		{#if editingNote}
+			<input
+				bind:this={noteInput}
+				type="text"
+				class="mb-1.5 w-full rounded border border-neutral-700 bg-neutral-800 px-2 py-1 text-xs text-neutral-200 placeholder-neutral-600"
+				bind:value={noteDraft}
+				maxlength={200}
+				placeholder="Add a note..."
+				draggable="false"
+				ondragstart={(e) => e.preventDefault()}
+				onmousedown={(e) => e.stopPropagation()}
+				onkeydown={(e) => {
+					if (e.key === 'Enter') saveNote();
+					if (e.key === 'Escape') cancelNote();
+					e.stopPropagation();
+				}}
+				onblur={saveNote}
+				onclick={(e) => e.stopPropagation()}
+			/>
+		{:else if card.note}
+			<button
+				class="mb-1.5 w-full text-left text-xs text-neutral-400 italic hover:text-neutral-300"
+				onmousedown={(e) => e.stopPropagation()}
+				onclick={(e) => { e.stopPropagation(); startEditNote(); }}
+				title="Click to edit"
+			>
+				{card.note}
+			</button>
+		{:else}
+			<button
+				class="mb-1.5 w-full text-left text-xs text-neutral-600 italic hover:text-neutral-500"
+				onmousedown={(e) => e.stopPropagation()}
+				onclick={(e) => { e.stopPropagation(); startEditNote(); }}
+			>
+				Add note...
+			</button>
+		{/if}
 	{/if}
 	<div class="flex items-center justify-between text-xs text-neutral-400">
 		<span>{card.isOwnPR ? '🤖' : '👤'} {card.author}</span>

@@ -40,10 +40,11 @@ export interface PRCard {
   signals: Signal[];
   archived: boolean;
   order: number;
+  note?: string;
 }
 
 export interface BoardState {
-  cards: Record<string, { column: ColumnId; order: number; archived?: boolean; manual?: boolean }>;
+  cards: Record<string, { column: ColumnId; order: number; archived?: boolean; manual?: boolean; note?: string }>;
   enabledRepos?: string[];
 }
 

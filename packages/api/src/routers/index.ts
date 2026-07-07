@@ -14,6 +14,7 @@ import {
   reorderCard,
   archiveCard,
   unarchiveCard,
+  updateNote,
 } from "../store";
 import {
   addColumn,
@@ -143,6 +144,7 @@ export const appRouter = {
           columnId: getCardColumn(automatedState, pr.id),
           archived: automatedState.cards[pr.id]?.archived ?? false,
           order: automatedState.cards[pr.id]?.order ?? Date.now(),
+          note: automatedState.cards[pr.id]?.note,
         }));
 
         const orphans = findOrphanedCards(automatedState, config);
@@ -232,6 +234,15 @@ export const appRouter = {
       .handler(async ({ input, context }) => {
         const state = await context.store.load();
         const updated = unarchiveCard(state, input.cardId);
+        await context.store.save(updated);
+        return updated;
+      }),
+
+    updateNote: publicProcedure
+      .input(z.object({ cardId: z.string(), note: z.string().max(200) }))
+      .handler(async ({ input, context }) => {
+        const state = await context.store.load();
+        const updated = updateNote(state, input.cardId, input.note);
         await context.store.save(updated);
         return updated;
       }),

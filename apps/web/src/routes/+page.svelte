@@ -129,6 +129,11 @@
 		await rpc('board/unarchiveCard', { cardId });
 	}
 
+	async function onUpdateNote(cardId: string, note: string) {
+		cards = cards.map((c) => (c.id === cardId ? { ...c, note: note || undefined } : c));
+		await rpc('board/updateNote', { cardId, note });
+	}
+
 	async function rpcConfig(path: string, body: unknown) {
 		const res = await rpc(`config/${path}`, body);
 		if (res.ok) {
@@ -188,6 +193,7 @@
 	{onReorderCard}
 	{onArchiveCard}
 	{onUnarchiveCard}
+	{onUpdateNote}
 	{onAddColumn}
 	{onRenameColumn}
 	{onDeleteColumn}
