@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { searchRepos } from '$lib/board-service';
+
 	let {
 		enabledRepos = [],
 		repoCounts = new Map<string, number>(),
@@ -26,15 +28,7 @@
 			return;
 		}
 		try {
-			const res = await fetch('/rpc/repos/search', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ json: { q: q.trim() } })
-			});
-			if (res.ok) {
-				const data = (await res.json()) as { json: { repos: string[] } };
-				searchResults = data.json.repos ?? [];
-			}
+			searchResults = await searchRepos(q.trim());
 		} catch {
 			// ignore
 		}

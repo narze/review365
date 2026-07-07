@@ -4,6 +4,7 @@
 	import RepoFilter from './RepoFilter.svelte';
 	import ColumnManager from './ColumnManager.svelte';
 	import RuleManager from './RuleManager.svelte';
+	import AccountSettings from './AccountSettings.svelte';
 	import { SvelteMap } from 'svelte/reactivity';
 
 	let {
@@ -27,7 +28,9 @@
 		onRefresh,
 		onReorderColumns,
 		mergedRetentionDays = 14,
-		onSetRetention
+		onSetRetention,
+		onSignOut,
+		onImported
 	}: {
 		cards: PRCard[];
 		columns: ColumnDef[];
@@ -50,6 +53,8 @@
 		onReorderColumns: (ids: string[]) => void;
 		mergedRetentionDays: number;
 		onSetRetention: (days: number) => void;
+		onSignOut: () => void;
+		onImported: () => void;
 	} = $props();
 
 	let showSettings = $state(false);
@@ -201,6 +206,7 @@
 {#if showSettings}
 	<div class="border-b border-neutral-800 bg-neutral-900 p-4">
 		<div class="mx-auto max-w-3xl grid gap-6">
+			<AccountSettings {onSignOut} {onImported} />
 			<ColumnManager {columns} onAdd={onAddColumn} onRename={onRenameColumn} onDelete={onDeleteColumn} />
 			<RuleManager {columns} {rules} {signalLabels} onAdd={onAddRule} onDelete={onDeleteRule} />
 			<div class="flex items-center gap-3 rounded-lg border border-neutral-800 p-4">

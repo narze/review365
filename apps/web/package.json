@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vp dev",
-    "build": "SKIP_ENV_VALIDATION=1 vp build",
+    "build": "vp build",
     "preview": "vp preview",
     "prepare": "svelte-kit sync || echo ''",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
@@ -13,24 +13,14 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
-    "@orpc/client": "catalog:",
-    "@orpc/openapi": "catalog:",
-    "@orpc/server": "catalog:",
-    "@orpc/tanstack-query": "^1.14.6",
-    "@orpc/zod": "catalog:",
-    "@review365/api": "workspace:*",
-    "@review365/env": "workspace:*",
-    "@tanstack/svelte-query": "^5.85.3",
-    "dotenv": "catalog:",
-    "zod": "catalog:"
+    "@review365/api": "workspace:*"
   },
   "devDependencies": {
     "@review365/config": "workspace:*",
-    "@sveltejs/adapter-auto": "^7.0.1",
+    "@sveltejs/adapter-static": "^3.0.8",
     "@sveltejs/kit": "^2.58.0",
     "@sveltejs/vite-plugin-svelte": "^7.0.0",
     "@tailwindcss/vite": "^4.3.1",
-    "@tanstack/svelte-query-devtools": "^5.85.3",
     "svelte": "^5.55.5",
     "svelte-check": "^4.4.6",
     "tailwindcss": "^4.3.1",

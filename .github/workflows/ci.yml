@@ -6,12 +6,6 @@ on:
   pull_request:
     branches: [main]
 
-env:
-  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  GITHUB_USER: narze
-  BOARD_FILE: /tmp/e2e-board.json
-  BOARD_CONFIG_FILE: /tmp/e2e-config.json
-
 jobs:
   check:
     name: Lint & Typecheck & Unit Tests

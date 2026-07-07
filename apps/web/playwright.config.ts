@@ -20,7 +20,7 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: "BOARD_FILE=/tmp/e2e-board.json BOARD_CONFIG_FILE=/tmp/e2e-config.json bun run dev",
+    command: "bun run dev",
     port: 5173,
     timeout: 60000,
     reuseExistingServer: true,

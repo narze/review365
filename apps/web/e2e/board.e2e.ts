@@ -1,7 +1,93 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
+
+const REPO = "test/repo";
+
+interface GHItem {
+  number: number;
+  title: string;
+  html_url: string;
+  updated_at: string;
+  user: { login: string };
+  repository_url: string;
+  draft: boolean;
+}
+
+function ghSearchItem(n: number, title: string, opts: { draft?: boolean; author?: string } = {}): GHItem {
+  return {
+    number: n,
+    title,
+    html_url: `https://github.com/${REPO}/pull/${n}`,
+    updated_at: new Date().toISOString(),
+    user: { login: opts.author ?? "someone" },
+    repository_url: `https://api.github.com/repos/${REPO}`,
+    draft: opts.draft ?? false,
+  };
+}
+
+async function seedAuth(page: Page, opts: { enabledRepos?: string[] } = {}) {
+  await page.addInitScript((repos) => {
+    localStorage.setItem("review365:token", "test-token");
+    localStorage.setItem("review365:login", "testuser");
+    localStorage.setItem("review365:board", JSON.stringify({ cards: {}, enabledRepos: repos }));
+  }, opts.enabledRepos ?? []);
+}
+
+async function mockGitHub(
+  page: Page,
+  opts: { reviewRequested?: GHItem[]; own?: GHItem[]; merged?: GHItem[] } = {},
+) {
+  await page.route("https://api.github.com/**", async (route) => {
+    const url = new URL(route.request().url());
+
+    if (url.pathname === "/search/issues") {
+      const q = url.searchParams.get("q") ?? "";
+      let items: GHItem[] = [];
+      if (q.includes("review-requested:")) items = opts.reviewRequested ?? [];
+      else if (q.includes("is:merged")) items = opts.merged ?? [];
+      else if (q.includes("author:")) items = opts.own ?? [];
+      await route.fulfill({ json: { total_count: items.length, items } });
+      return;
+    }
+    if (/^\/repos\/.+\/pulls\/\d+\/reviews$/.test(url.pathname)) {
+      await route.fulfill({ json: [] });
+      return;
+    }
+    if (url.pathname === "/search/repositories") {
+      await route.fulfill({
+        json: { total_count: 1, items: [{ full_name: REPO, archived: false }] },
+      });
+      return;
+    }
+    if (/^\/users\/.+\/orgs$/.test(url.pathname)) {
+      await route.fulfill({ json: [] });
+      return;
+    }
+    if (url.pathname === "/user") {
+      await route.fulfill({ json: { login: "testuser" } });
+      return;
+    }
+    await route.fulfill({ status: 404, json: { message: "not mocked" } });
+  });
+}
 
 test.describe("Review365", () => {
+  test("onboarding: gate shows without token, sign-in reveals board", async ({ page }) => {
+    await mockGitHub(page);
+    await page.goto("/");
+
+    await expect(page.locator("h1")).toContainText("Welcome to Review365");
+    await expect(page.getByRole("button", { name: "Refresh" })).not.toBeVisible();
+
+    await page.locator("#token-input").fill("ghp_testtoken");
+    await page.getByRole("button", { name: "Sign in" }).click();
+
+    await expect(page.locator("h1")).toContainText("Review365");
+    await expect(page.getByRole("button", { name: "Refresh" })).toBeVisible({ timeout: 5000 });
+  });
+
   test("page loads with title and toolbar", async ({ page }) => {
+    await seedAuth(page);
+    await mockGitHub(page);
     await page.goto("/", { waitUntil: "networkidle" });
     await expect(page.locator("h1")).toContainText("Review365");
     await expect(page.getByRole("button", { name: "Refresh" })).toBeVisible();
@@ -9,14 +95,20 @@ test.describe("Review365", () => {
   });
 
   test("settings panel opens and shows inputs", async ({ page }) => {
+    await seedAuth(page);
+    await mockGitHub(page);
     await page.goto("/", { waitUntil: "networkidle" });
     await page.locator("h1").waitFor({ state: "visible" });
     await page.locator("button", { hasText: "Settings" }).click();
     await page.getByPlaceholder("New column title...").waitFor({ state: "visible", timeout: 5000 });
     await expect(page.getByText("Merged PR retention")).toBeVisible();
+    await expect(page.getByText("Signed in as")).toBeVisible();
+    await expect(page.getByText("@testuser")).toBeVisible();
   });
 
   test("adds and deletes a column", async ({ page }) => {
+    await seedAuth(page);
+    await mockGitHub(page);
     await page.goto("/", { waitUntil: "networkidle" });
     await page.locator("h1").waitFor({ state: "visible" });
     await page.locator("button", { hasText: "Settings" }).click();
@@ -40,56 +132,14 @@ test.describe("Review365", () => {
   });
 
   test("note: adds and edits a note on a card", async ({ page }) => {
-    // Mock the prs/list RPC to return a card
-    await page.route("**/rpc/prs/list", async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          json: {
-            columns: [{ id: "inbox", title: "Inbox" }],
-            cards: [
-              {
-                id: "pr_test_repo_1",
-                prNumber: 1,
-                repo: "test/repo",
-                title: "Test PR",
-                author: "testuser",
-                url: "https://github.com/test/repo/pull/1",
-                updatedAt: new Date().toISOString(),
-                isOwnPR: false,
-                columnId: "inbox",
-                signals: ["pr-open"],
-                archived: false,
-                order: 1,
-              },
-            ],
-            enabledRepos: ["test/repo"],
-            rules: [],
-            orphans: [],
-            signalLabels: { "pr-open": "PR Open" },
-            mergedRetentionDays: 14,
-          },
-        }),
-      });
-    });
-
-    // Mock the board/updateNote RPC
-    let savedNote = "";
-    await page.route("**/rpc/board/updateNote", async (route) => {
-      const body = route.request().postDataJSON();
-      savedNote = body.json.note;
-      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true }) });
-    });
+    await seedAuth(page, { enabledRepos: [REPO] });
+    await mockGitHub(page, { reviewRequested: [ghSearchItem(1, "Test PR")] });
 
     await page.goto("/", { waitUntil: "networkidle" });
     await page.locator("h1").waitFor({ state: "visible" });
 
-    // Click Refresh to trigger a client-side fetch (will use our mock)
-    await page.locator("button", { hasText: "Refresh" }).click();
-
-    // Verify the card is visible
-    await expect(page.locator("text=test/repo")).toBeVisible({ timeout: 5000 });
+    // Card loads from the mocked GitHub API on mount
+    await expect(page.locator(`text=${REPO}`)).toBeVisible({ timeout: 5000 });
 
     // Click "Add note..." to start editing
     const addNoteBtn = page.getByRole("button", { name: "Add note..." }).first();
@@ -107,7 +157,11 @@ test.describe("Review365", () => {
     // Verify the note appears on the card
     await expect(page.getByRole("button", { name: "Review the error handling" })).toBeVisible();
 
-    // Verify the updateNote RPC was called
+    // Verify the note was persisted to localStorage
+    const savedNote = await page.evaluate(() => {
+      const state = JSON.parse(localStorage.getItem("review365:board") ?? "{}");
+      return state.cards?.["pr_test_repo_1"]?.note;
+    });
     expect(savedNote).toBe("Review the error handling");
 
     // Click the note to edit again
@@ -125,51 +179,12 @@ test.describe("Review365", () => {
   });
 
   test("note: input is not draggable", async ({ page }) => {
-    // Mock the prs/list RPC to return a card
-    await page.route("**/rpc/prs/list", async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          json: {
-            columns: [{ id: "inbox", title: "Inbox" }],
-            cards: [
-              {
-                id: "pr_test_repo_1",
-                prNumber: 1,
-                repo: "test/repo",
-                title: "Test PR",
-                author: "testuser",
-                url: "https://github.com/test/repo/pull/1",
-                updatedAt: new Date().toISOString(),
-                isOwnPR: false,
-                columnId: "inbox",
-                signals: [],
-                archived: false,
-                order: 1,
-              },
-            ],
-            enabledRepos: ["test/repo"],
-            rules: [],
-            orphans: [],
-            signalLabels: {},
-            mergedRetentionDays: 14,
-          },
-        }),
-      });
-    });
-
-    // Mock the board/updateNote RPC
-    await page.route("**/rpc/board/updateNote", async (route) => {
-      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true }) });
-    });
+    await seedAuth(page, { enabledRepos: [REPO] });
+    await mockGitHub(page, { reviewRequested: [ghSearchItem(1, "Test PR")] });
 
     await page.goto("/", { waitUntil: "networkidle" });
     await page.locator("h1").waitFor({ state: "visible" });
-
-    // Click Refresh to load mocked data client-side
-    await page.locator("button", { hasText: "Refresh" }).click();
-    await expect(page.locator("text=test/repo")).toBeVisible({ timeout: 5000 });
+    await expect(page.locator(`text=${REPO}`)).toBeVisible({ timeout: 5000 });
 
     // Open note editing
     await page.getByRole("button", { name: "Add note..." }).first().click();
@@ -195,5 +210,22 @@ test.describe("Review365", () => {
 
       await page.mouse.up();
     }
+  });
+
+  test("export excludes token, import restores board", async ({ page }) => {
+    await seedAuth(page, { enabledRepos: [REPO] });
+    await mockGitHub(page);
+    await page.goto("/", { waitUntil: "networkidle" });
+    await page.locator("button", { hasText: "Settings" }).click();
+
+    const downloadPromise = page.waitForEvent("download");
+    await page.getByRole("button", { name: "Export board" }).click();
+    const download = await downloadPromise;
+    const content = await (await download.createReadStream()).toArray();
+    const json = JSON.parse(Buffer.concat(content).toString());
+
+    expect(json.board.enabledRepos).toEqual([REPO]);
+    expect(json.config.columns.length).toBeGreaterThan(0);
+    expect(JSON.stringify(json)).not.toContain("test-token");
   });
 });

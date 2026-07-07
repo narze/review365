@@ -1,73 +1,36 @@
 <script lang="ts">
 	import KanbanBoard from '../components/KanbanBoard.svelte';
+	import TokenSetup from '../components/TokenSetup.svelte';
 	import { onMount } from 'svelte';
-	import type { PRCard, ColumnId, ColumnDef } from '@review365/api/types';
+	import type { PRCard, ColumnId, ColumnDef, Signal } from '@review365/api/types';
+	import { DEFAULT_CONFIG } from '@review365/api/types';
+	import { hasToken } from '$lib/auth';
+	import { listPRs, board, config as configService } from '$lib/board-service';
 
-	let { data } = $props();
+	let signedIn = $state(hasToken());
 
-	// Initial values from SSR data; managed as mutable state thereafter
-	// svelte-ignore state_referenced_locally
-	const init: {
-		cards: PRCard[];
-		columns: ColumnDef[];
-		enabledRepos: string[];
-		rules: { id: string; signal: string; columnId: string }[];
-		orphans: { cardId: string; column: ColumnId }[];
-		signalLabels: Record<string, string>;
-		mergedRetentionDays: number;
-	} = {
-		cards: data.cards ?? [],
-		columns: data.columns ?? [],
-		enabledRepos: data.enabledRepos ?? [],
-		rules: data.rules ?? [],
-		orphans: data.orphans ?? [],
-		signalLabels: data.signalLabels ?? {},
-		mergedRetentionDays: data.mergedRetentionDays ?? 14
-	};
-
-	let cards = $state<PRCard[]>(init.cards);
-	let columns = $state<ColumnDef[]>(init.columns);
-	let enabledRepos = $state<string[]>(init.enabledRepos);
-	let rules = $state<{ id: string; signal: string; columnId: string }[]>(init.rules);
-	let orphans = $state<{ cardId: string; column: ColumnId }[]>(init.orphans);
-	let signalLabels = $state<Record<string, string>>(init.signalLabels);
-	let mergedRetentionDays = $state<number>(init.mergedRetentionDays);
+	let cards = $state<PRCard[]>([]);
+	let columns = $state<ColumnDef[]>(DEFAULT_CONFIG.columns);
+	let enabledRepos = $state<string[]>([]);
+	let rules = $state<{ id: string; signal: string; columnId: string }[]>(DEFAULT_CONFIG.rules);
+	let orphans = $state<{ cardId: string; column: ColumnId }[]>([]);
+	let signalLabels = $state<Record<string, string>>({});
+	let mergedRetentionDays = $state<number>(DEFAULT_CONFIG.mergedRetentionDays ?? 14);
 
 	async function refresh(force = false) {
+		if (!signedIn) return;
 		try {
-			const res = await fetch('/rpc/prs/list', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ json: { force } })
-			});
-			if (res.ok) {
-				const data = (await res.json()) as {
-					json: {
-						cards: PRCard[];
-						columns: ColumnDef[];
-						enabledRepos: string[];
-						rules: { id: string; signal: string; columnId: string }[];
-						orphans: { cardId: string; column: ColumnId }[];
-						signalLabels: Record<string, string>;
-					};
-				};
-				cards = data.json.cards ?? [];
-				columns = data.json.columns ?? columns;
-				enabledRepos = data.json.enabledRepos ?? [];
-				rules = data.json.rules ?? rules;
-				orphans = data.json.orphans ?? [];
-			}
+			const data = await listPRs(force);
+			cards = data.cards;
+			columns = data.columns;
+			enabledRepos = data.enabledRepos;
+			rules = data.rules;
+			orphans = data.orphans;
+			signalLabels = data.signalLabels;
+			mergedRetentionDays = data.mergedRetentionDays;
 		} catch {
-			// ignore
+			// GitHub unreachable or token revoked; keep last known board
 		}
-	}
-
-	async function rpc(path: string, body: unknown) {
-		return fetch(`/rpc/${path}`, {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ json: body })
-		});
 	}
 
 	async function onToggleRepo(repo: string) {
@@ -77,14 +40,14 @@
 			const prefix = `pr_${repo.replace('/', '_')}_`;
 			cards = cards.filter((c) => !c.id.startsWith(prefix));
 		}
-		await rpc('board/toggleRepo', { repo });
+		await board.toggleRepo(repo);
 	}
 
 	async function onMoveCard(cardId: string, column: ColumnId) {
 		cards = cards.map((c) =>
 			c.id === cardId ? { ...c, columnId: column, order: Date.now() } : c
 		);
-		await rpc('board/moveCard', { cardId, column });
+		await board.moveCard(cardId, column);
 	}
 
 	async function onReorderCard(cardId: string, targetCardId: string | null, column: ColumnId) {
@@ -116,91 +79,106 @@
 			return o != null ? { ...c, order: o } : c;
 		});
 
-		await rpc('board/reorderCard', { cardId, targetCardId, column });
+		await board.reorderCard(cardId, targetCardId, column);
 	}
 
 	async function onArchiveCard(cardId: string) {
 		cards = cards.map((c) => (c.id === cardId ? { ...c, archived: true } : c));
-		await rpc('board/archiveCard', { cardId });
+		await board.archiveCard(cardId);
 	}
 
 	async function onUnarchiveCard(cardId: string) {
 		cards = cards.map((c) => (c.id === cardId ? { ...c, archived: false } : c));
-		await rpc('board/unarchiveCard', { cardId });
+		await board.unarchiveCard(cardId);
 	}
 
 	async function onUpdateNote(cardId: string, note: string) {
 		cards = cards.map((c) => (c.id === cardId ? { ...c, note: note || undefined } : c));
-		await rpc('board/updateNote', { cardId, note });
+		await board.updateNote(cardId, note);
 	}
 
-	async function rpcConfig(path: string, body: unknown) {
-		const res = await rpc(`config/${path}`, body);
-		if (res.ok) {
-			const data = (await res.json()) as { json: { columns: ColumnDef[]; rules: unknown[] } };
-			columns = data.json.columns;
-			rules = data.json.rules as typeof rules;
-		}
+	function applyConfig(updated: { columns: ColumnDef[]; rules: unknown[] }) {
+		columns = updated.columns;
+		rules = updated.rules as typeof rules;
 	}
 
 	async function onAddColumn(title: string) {
-		await rpcConfig('columns/add', { title });
+		applyConfig(await configService.addColumn(title));
 	}
 
 	async function onRenameColumn(id: string, title: string) {
-		await rpcConfig('columns/rename', { id, title });
+		applyConfig(await configService.renameColumn(id, title));
 	}
 
 	async function onDeleteColumn(id: string) {
-		await rpcConfig('columns/delete', { id });
+		applyConfig(await configService.deleteColumn(id));
 	}
 
 	async function onAddRule(signal: string, columnId: string) {
-		await rpcConfig('rules/add', { signal, columnId });
+		applyConfig(await configService.addRule(signal as Signal, columnId));
 	}
 
 	async function onDeleteRule(id: string) {
-		await rpcConfig('rules/delete', { id });
+		applyConfig(await configService.deleteRule(id));
 	}
 
 	async function onReorderColumns(ids: string[]) {
 		const map = new Map(columns.map((c) => [c.id, c]));
 		columns = ids.map((id) => map.get(id)!).filter(Boolean);
-		await rpcConfig('columns/reorder', { ids });
+		applyConfig(await configService.reorderColumns(ids));
 	}
 
 	async function onSetRetention(days: number) {
 		mergedRetentionDays = days;
-		await rpc('config/retention', { days });
+		await configService.setRetention(days);
+	}
+
+	function onSignedIn() {
+		signedIn = true;
+		refresh(true);
+	}
+
+	function onSignOut() {
+		signedIn = false;
+		cards = [];
+		enabledRepos = [];
+		orphans = [];
 	}
 
 	let interval: ReturnType<typeof setInterval>;
 	onMount(() => {
+		refresh(false);
 		interval = setInterval(() => refresh(false), 5 * 60 * 1000);
 		return () => clearInterval(interval);
 	});
 </script>
 
-<KanbanBoard
-	{cards}
-	{columns}
-	{enabledRepos}
-	{rules}
-	{orphans}
-	{signalLabels}
-	{onToggleRepo}
-	{onMoveCard}
-	{onReorderCard}
-	{onArchiveCard}
-	{onUnarchiveCard}
-	{onUpdateNote}
-	{onAddColumn}
-	{onRenameColumn}
-	{onDeleteColumn}
-	{onAddRule}
-	{onDeleteRule}
-	{onReorderColumns}
-	{mergedRetentionDays}
-	{onSetRetention}
-	onRefresh={() => refresh(true)}
-/>
+{#if !signedIn}
+	<TokenSetup onDone={onSignedIn} />
+{:else}
+	<KanbanBoard
+		{cards}
+		{columns}
+		{enabledRepos}
+		{rules}
+		{orphans}
+		{signalLabels}
+		{onToggleRepo}
+		{onMoveCard}
+		{onReorderCard}
+		{onArchiveCard}
+		{onUnarchiveCard}
+		{onUpdateNote}
+		{onAddColumn}
+		{onRenameColumn}
+		{onDeleteColumn}
+		{onAddRule}
+		{onDeleteRule}
+		{onReorderColumns}
+		{mergedRetentionDays}
+		{onSetRetention}
+		{onSignOut}
+		onImported={() => refresh(false)}
+		onRefresh={() => refresh(true)}
+	/>
+{/if}
