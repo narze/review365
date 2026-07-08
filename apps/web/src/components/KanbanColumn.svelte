@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { flip } from 'svelte/animate';
+	import { slide } from 'svelte/transition';
 	import type { PRCard, ColumnId, ColumnDef } from '@review365/api/types';
 	import KanbanCard from './KanbanCard.svelte';
 
@@ -63,9 +64,28 @@
 		showArchived ? cards : cards.filter((c) => !c.archived)
 	);
 
+	type DisplayItem = { key: string; card: PRCard } | { key: '__placeholder__' };
+
+	// Insert a placeholder gap at the drop spot so sibling cards animate out of the way
+	// (via animate:flip below) instead of just highlighting a border. The dragged card
+	// itself is left untouched wherever it already is — resizing or hiding it mid-drag
+	// confuses the browser's native drag session and can wedge the drag entirely.
+	const displayList = $derived.by((): DisplayItem[] => {
+		const items: DisplayItem[] = visibleCards.map((c) => ({ key: c.id, card: c }));
+		if (!isOver && dropTargetId === null) return items;
+		let idx = items.length;
+		if (dropTargetId) {
+			const targetIdx = items.findIndex((it) => it.key === dropTargetId);
+			if (targetIdx >= 0) idx = dropAbove ? targetIdx : targetIdx + 1;
+		}
+		items.splice(idx, 0, { key: '__placeholder__' });
+		return items;
+	});
+
 	function handleColumnDragOver(e: DragEvent) {
 		e.preventDefault();
 		isOver = true;
+		dropTargetId = null;
 	}
 
 	function handleColumnDragLeave(e: DragEvent) {
@@ -183,25 +203,25 @@
 		</span>
 	</div>
 	<div class="column-body flex flex-1 flex-col gap-2 overflow-y-auto p-2">
-		{#if isOver && dropTargetId === null}
-			<div class="h-0.5 rounded bg-blue-500"></div>
-		{/if}
-		{#each visibleCards as card (card.id)}
-			<div
-				role="listitem"
-				animate:flip={{ duration: 300 }}
-				ondragover={(e) => handleCardDragOver(e, card.id)}
-				ondragleave={handleCardDragLeave}
-				class="rounded-md transition-all {dropTargetId === card.id && dropAbove
-					? 'border-t-2 border-t-blue-500'
-					: dropTargetId === card.id && !dropAbove
-						? 'border-b-2 border-b-blue-500'
-						: ''}"
-			>
-				<KanbanCard {card} {onArchive} {onUnarchive} {onUpdateNote} />
+		{#each displayList as item (item.key)}
+			<div animate:flip={{ duration: 200 }}>
+				{#if !('card' in item)}
+					<div
+						class="h-20 shrink-0 rounded-md border-2 border-dashed border-blue-500/60 bg-blue-950/20"
+						transition:slide={{ duration: 150 }}
+					></div>
+				{:else}
+					<div
+						role="listitem"
+						ondragover={(e) => handleCardDragOver(e, item.card.id)}
+						ondragleave={handleCardDragLeave}
+					>
+						<KanbanCard card={item.card} {onArchive} {onUnarchive} {onUpdateNote} />
+					</div>
+				{/if}
 			</div>
 		{/each}
-		{#if visibleCards.length === 0}
+		{#if visibleCards.length === 0 && !isOver}
 			<div class="py-6 text-center text-sm text-neutral-600">No PRs</div>
 		{/if}
 	</div>
