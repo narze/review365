@@ -1,5 +1,6 @@
 import type { PRCard, Signal } from "../types";
 import type { ProviderContext, ReviewProvider } from "./types";
+import { mapWithConcurrency } from "./concurrency";
 
 const GITHUB_API = "https://api.github.com";
 
@@ -135,12 +136,28 @@ async function fetchPRs(
 
   const cardMap = new Map<string, PRCard & { signals: Signal[] }>();
 
-  // 1. PRs where user is requested as reviewer
+  // Independent search queries: run concurrently instead of one round trip at a time.
   const reviewQuery = `is:pr is:open review-requested:${user}`;
-  const reviewResult = await ghFetch<GHSearchResponse>(
-    token,
-    `/search/issues?q=${encodeURIComponent(reviewQuery)}&per_page=50`,
-  );
+  const ownQuery = `is:pr is:open author:${user}`;
+  const cutoff = new Date(Date.now() - mergedRetentionDays * 86400000).toISOString().split("T")[0];
+  const mergedQuery = `is:pr is:merged author:${user} merged:>=${cutoff}`;
+
+  const [reviewResult, ownResult, mergedResult] = await Promise.all([
+    ghFetch<GHSearchResponse>(
+      token,
+      `/search/issues?q=${encodeURIComponent(reviewQuery)}&per_page=50`,
+    ),
+    ghFetch<GHSearchResponse>(
+      token,
+      `/search/issues?q=${encodeURIComponent(ownQuery)}&per_page=50`,
+    ),
+    ghFetch<GHSearchResponse>(
+      token,
+      `/search/issues?q=${encodeURIComponent(mergedQuery)}&per_page=20`,
+    ),
+  ]);
+
+  // 1. PRs where user is requested as reviewer
   for (const pr of reviewResult.items) {
     const id = prKey(pr);
     const signals: Signal[] = ["pr-open", "review-requested"];
@@ -149,11 +166,6 @@ async function fetchPRs(
   }
 
   // 2. PRs created by user (own PRs)
-  const ownQuery = `is:pr is:open author:${user}`;
-  const ownResult = await ghFetch<GHSearchResponse>(
-    token,
-    `/search/issues?q=${encodeURIComponent(ownQuery)}&per_page=50`,
-  );
   for (const pr of ownResult.items) {
     const id = prKey(pr);
     if (!cardMap.has(id)) {
@@ -164,12 +176,6 @@ async function fetchPRs(
   }
 
   // 3. Recently merged PRs (own, within configured retention)
-  const cutoff = new Date(Date.now() - mergedRetentionDays * 86400000).toISOString().split("T")[0];
-  const mergedQuery = `is:pr is:merged author:${user} merged:>=${cutoff}`;
-  const mergedResult = await ghFetch<GHSearchResponse>(
-    token,
-    `/search/issues?q=${encodeURIComponent(mergedQuery)}&per_page=20`,
-  );
   for (const pr of mergedResult.items) {
     const id = prKey(pr);
     if (!cardMap.has(id)) {
@@ -199,7 +205,7 @@ async function enrichWithReviewSignals(
   const watchlisted = [...cardMap.values()].filter(
     (c) => !c.signals.includes("merged") && enabledRepos.includes(c.repo),
   );
-  for (const card of watchlisted) {
+  await mapWithConcurrency(watchlisted, 8, async (card) => {
     try {
       const reviews = await fetchReviews(token, card.repo, card.prNumber);
       const myReviews = reviews
@@ -232,7 +238,7 @@ async function enrichWithReviewSignals(
     } catch {
       // PR may be from a repo we can't access reviews for
     }
-  }
+  });
 }
 
 async function fetchOwnedRepos(ctx: ProviderContext, query: string): Promise<string[]> {

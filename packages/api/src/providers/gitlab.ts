@@ -1,5 +1,6 @@
 import type { PRCard, Signal } from "../types";
 import type { ProviderContext, ReviewProvider } from "./types";
+import { mapWithConcurrency } from "./concurrency";
 
 const DEFAULT_HOST = "https://gitlab.com";
 
@@ -134,12 +135,27 @@ async function fetchPRs(
     return cardMap.get(id)!;
   };
 
+  // Independent list queries: run concurrently instead of one round trip at a time.
+  const cutoff = new Date(Date.now() - mergedRetentionDays * 86400000).toISOString();
+  const [reviewResult, ownResult, mergedResult] = await Promise.all([
+    glFetch<GLMr[]>(
+      token,
+      host,
+      `/merge_requests?scope=all&reviewer_username=${encodeURIComponent(user)}&state=opened&per_page=50`,
+    ),
+    glFetch<GLMr[]>(
+      token,
+      host,
+      `/merge_requests?scope=all&author_username=${encodeURIComponent(user)}&state=opened&per_page=50`,
+    ),
+    glFetch<GLMr[]>(
+      token,
+      host,
+      `/merge_requests?scope=all&author_username=${encodeURIComponent(user)}&state=merged&updated_after=${cutoff}&per_page=20`,
+    ),
+  ]);
+
   // 1. MRs where the user is a requested reviewer
-  const reviewResult = await glFetch<GLMr[]>(
-    token,
-    host,
-    `/merge_requests?scope=all&reviewer_username=${encodeURIComponent(user)}&state=opened&per_page=50`,
-  );
   for (const mr of reviewResult) {
     const signals: Signal[] = ["pr-open", "review-requested"];
     if (isDraft(mr)) signals.push("draft");
@@ -147,11 +163,6 @@ async function fetchPRs(
   }
 
   // 2. MRs authored by the user (own MRs)
-  const ownResult = await glFetch<GLMr[]>(
-    token,
-    host,
-    `/merge_requests?scope=all&author_username=${encodeURIComponent(user)}&state=opened&per_page=50`,
-  );
   for (const mr of ownResult) {
     const signals: Signal[] = ["pr-open", "own-pr"];
     if (isDraft(mr)) signals.push("draft");
@@ -159,12 +170,6 @@ async function fetchPRs(
   }
 
   // 3. Recently merged MRs (own, within configured retention)
-  const cutoff = new Date(Date.now() - mergedRetentionDays * 86400000).toISOString();
-  const mergedResult = await glFetch<GLMr[]>(
-    token,
-    host,
-    `/merge_requests?scope=all&author_username=${encodeURIComponent(user)}&state=merged&updated_after=${cutoff}&per_page=20`,
-  );
   for (const mr of mergedResult) {
     const card = add(mr, true, ["merged", "own-pr"]);
     if (!card.signals.includes("merged")) card.signals.push("merged");
@@ -175,14 +180,14 @@ async function fetchPRs(
     const watchlisted = [...cardMap.values()].filter(
       (c) => !c.signals.includes("merged") && enabledRepos.includes(c.repo),
     );
-    for (const card of watchlisted) {
+    await mapWithConcurrency(watchlisted, 8, async (card) => {
       try {
         const approved = await fetchApproved(token, host, card.projectId, card.prNumber);
         if (approved && !card.signals.includes("approved")) card.signals.push("approved");
       } catch {
         // MR may be from a project we can't read approvals for
       }
-    }
+    });
   }
 
   const prs = [...cardMap.values()].map(({ projectId: _projectId, ...card }) => card);

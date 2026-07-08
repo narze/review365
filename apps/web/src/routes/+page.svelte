@@ -5,22 +5,45 @@
 	import type { PRCard, ColumnId, ColumnDef, Signal, Platform } from '@review365/api/types';
 	import { DEFAULT_CONFIG } from '@review365/api/types';
 	import { hasToken, getPlatform, getLogin, setPlatform } from '$lib/auth';
-	import { listPRs, board, config as configService } from '$lib/board-service';
+	import { listPRs, loadCachedBoard, board, config as configService } from '$lib/board-service';
+	import type { BoardSnapshot } from '$lib/board-service';
 
 	let signedIn = $state(hasToken());
 	let platform = $state<Platform>(getPlatform());
 	let login = $state<string | null>(getLogin());
 
-	let cards = $state<PRCard[]>([]);
-	let columns = $state<ColumnDef[]>(DEFAULT_CONFIG.columns);
-	let enabledRepos = $state<string[]>([]);
-	let rules = $state<{ id: string; signal: string; columnId: string }[]>(DEFAULT_CONFIG.rules);
-	let orphans = $state<{ cardId: string; column: ColumnId }[]>([]);
-	let signalLabels = $state<Record<string, string>>({});
-	let mergedRetentionDays = $state<number>(DEFAULT_CONFIG.mergedRetentionDays ?? 14);
+	const initialSnapshot = hasToken() ? loadCachedBoard() : null;
+
+	let cards = $state<PRCard[]>(initialSnapshot?.cards ?? []);
+	let columns = $state<ColumnDef[]>(initialSnapshot?.columns ?? DEFAULT_CONFIG.columns);
+	let enabledRepos = $state<string[]>(initialSnapshot?.enabledRepos ?? []);
+	let rules = $state<{ id: string; signal: string; columnId: string }[]>(
+		initialSnapshot?.rules ?? DEFAULT_CONFIG.rules
+	);
+	let orphans = $state<{ cardId: string; column: ColumnId }[]>(initialSnapshot?.orphans ?? []);
+	let signalLabels = $state<Record<string, string>>(initialSnapshot?.signalLabels ?? {});
+	let mergedRetentionDays = $state<number>(
+		initialSnapshot?.mergedRetentionDays ?? DEFAULT_CONFIG.mergedRetentionDays ?? 14
+	);
+	// True only while there's no board to show yet (first-ever visit, nothing cached).
+	// Once we have cached or fetched data, later refreshes happen quietly in the background.
+	let loading = $state(hasToken() && !initialSnapshot);
+	let online = $state(typeof navigator === 'undefined' || navigator.onLine);
+
+	/** Paints a platform's last-known board immediately, before the network refresh resolves. */
+	function hydrate(snapshot: BoardSnapshot | null) {
+		cards = snapshot?.cards ?? [];
+		columns = snapshot?.columns ?? DEFAULT_CONFIG.columns;
+		enabledRepos = snapshot?.enabledRepos ?? [];
+		rules = snapshot?.rules ?? DEFAULT_CONFIG.rules;
+		orphans = snapshot?.orphans ?? [];
+		signalLabels = snapshot?.signalLabels ?? {};
+		mergedRetentionDays = snapshot?.mergedRetentionDays ?? DEFAULT_CONFIG.mergedRetentionDays ?? 14;
+		loading = !snapshot;
+	}
 
 	async function refresh(force = false) {
-		if (!signedIn) return;
+		if (!signedIn || !online) return;
 		try {
 			const data = await listPRs(force);
 			cards = data.cards;
@@ -32,6 +55,8 @@
 			mergedRetentionDays = data.mergedRetentionDays;
 		} catch {
 			// GitHub unreachable or token revoked; keep last known board
+		} finally {
+			loading = false;
 		}
 	}
 
@@ -138,6 +163,7 @@
 		platform = getPlatform();
 		login = getLogin();
 		signedIn = true;
+		hydrate(loadCachedBoard());
 		refresh(true);
 	}
 
@@ -153,9 +179,7 @@
 		setPlatform(next);
 		platform = next;
 		login = getLogin(next);
-		cards = [];
-		enabledRepos = [];
-		orphans = [];
+		hydrate(loadCachedBoard());
 		if (hasToken(next)) {
 			signedIn = true;
 			refresh(true);
@@ -168,7 +192,22 @@
 	onMount(() => {
 		refresh(false);
 		interval = setInterval(() => refresh(false), 5 * 60 * 1000);
-		return () => clearInterval(interval);
+
+		const goOnline = () => {
+			online = true;
+			refresh(false);
+		};
+		const goOffline = () => {
+			online = false;
+		};
+		window.addEventListener('online', goOnline);
+		window.addEventListener('offline', goOffline);
+
+		return () => {
+			clearInterval(interval);
+			window.removeEventListener('online', goOnline);
+			window.removeEventListener('offline', goOffline);
+		};
 	});
 </script>
 
@@ -200,6 +239,8 @@
 		{platform}
 		{login}
 		{onSwitchPlatform}
+		{loading}
+		{online}
 		onImported={() => refresh(false)}
 		onRefresh={() => refresh(true)}
 	/>

@@ -33,7 +33,9 @@
 		onImported,
 		platform,
 		login,
-		onSwitchPlatform
+		onSwitchPlatform,
+		loading = false,
+		online = true
 	}: {
 		cards: PRCard[];
 		columns: ColumnDef[];
@@ -61,6 +63,8 @@
 		platform: Platform;
 		login: string | null;
 		onSwitchPlatform: (platform: Platform) => void;
+		loading?: boolean;
+		online?: boolean;
 	} = $props();
 
 	let showSettings = $state(false);
@@ -209,6 +213,12 @@
 	</div>
 </div>
 
+{#if !online}
+	<div class="border-b border-amber-900/50 bg-amber-950/40 px-6 py-1.5 text-xs text-amber-400">
+		📡 Offline — showing the last cards loaded. Reconnect to refresh.
+	</div>
+{/if}
+
 {#if showSettings}
 	<div class="border-b border-neutral-800 bg-neutral-900 p-4">
 		<div class="mx-auto max-w-3xl grid gap-6">
@@ -232,14 +242,21 @@
 {/if}
 
 {#if enabledRepos.length === 0}
-	<div class="flex flex-col items-center justify-center py-20 text-neutral-600">
-		<div class="mb-3 text-5xl opacity-50">📁</div>
-		<div class="mb-2 text-lg text-neutral-400">No repos selected</div>
-		<div class="text-sm">
-			Click <strong class="text-blue-400">Repos</strong> above and search to add repos to your
-			watchlist.
+	{#if loading}
+		<div class="flex flex-col items-center justify-center py-20 text-neutral-600">
+			<div class="mb-3 animate-pulse text-5xl opacity-50">⏳</div>
+			<div class="text-lg text-neutral-400">Loading your board…</div>
 		</div>
-	</div>
+	{:else}
+		<div class="flex flex-col items-center justify-center py-20 text-neutral-600">
+			<div class="mb-3 text-5xl opacity-50">📁</div>
+			<div class="mb-2 text-lg text-neutral-400">No repos selected</div>
+			<div class="text-sm">
+				Click <strong class="text-blue-400">Repos</strong> above and search to add repos to your
+				watchlist.
+			</div>
+		</div>
+	{/if}
 {:else}
 	<div class="flex min-h-[calc(100vh-65px)] items-start gap-4 overflow-x-auto p-6">
 		{#each columns as col (col.id)}

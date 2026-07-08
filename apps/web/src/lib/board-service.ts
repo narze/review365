@@ -36,6 +36,34 @@ function credentials(): { platform: Platform; ctx: ProviderContext } {
   return { platform, ctx: { token, user, host } };
 }
 
+export type BoardSnapshot = Awaited<ReturnType<typeof listPRs>>;
+
+function snapshotKey(platform: Platform = getPlatform()): string {
+  return `review365:snapshot:${platform}`;
+}
+
+/**
+ * Last board this platform successfully loaded. Lets the UI paint the previous
+ * cards/columns immediately on mount instead of a blank state while `listPRs`
+ * makes its network round trip.
+ */
+export function loadCachedBoard(): BoardSnapshot | null {
+  try {
+    const raw = localStorage.getItem(snapshotKey());
+    return raw ? (JSON.parse(raw) as BoardSnapshot) : null;
+  } catch {
+    return null;
+  }
+}
+
+function cacheBoard(snapshot: BoardSnapshot): void {
+  try {
+    localStorage.setItem(snapshotKey(), JSON.stringify(snapshot));
+  } catch {
+    // storage full or unavailable; skip caching
+  }
+}
+
 export async function listPRs(force = false) {
   const { platform, ctx } = credentials();
   const config = await configStore.load();
@@ -70,7 +98,7 @@ export async function listPRs(force = false) {
 
   const orphans = findOrphanedCards(automatedState, config);
 
-  return {
+  const result = {
     columns: config.columns,
     cards,
     enabledRepos: getEnabledRepos(automatedState),
@@ -79,6 +107,8 @@ export async function listPRs(force = false) {
     signalLabels: SIGNAL_LABELS,
     mergedRetentionDays: config.mergedRetentionDays ?? 14,
   };
+  cacheBoard(result);
+  return result;
 }
 
 export async function searchRepos(q: string): Promise<string[]> {
