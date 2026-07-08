@@ -2,12 +2,14 @@
 	import KanbanBoard from '../components/KanbanBoard.svelte';
 	import TokenSetup from '../components/TokenSetup.svelte';
 	import { onMount } from 'svelte';
-	import type { PRCard, ColumnId, ColumnDef, Signal } from '@review365/api/types';
+	import type { PRCard, ColumnId, ColumnDef, Signal, Platform } from '@review365/api/types';
 	import { DEFAULT_CONFIG } from '@review365/api/types';
-	import { hasToken } from '$lib/auth';
+	import { hasToken, getPlatform, getLogin, setPlatform } from '$lib/auth';
 	import { listPRs, board, config as configService } from '$lib/board-service';
 
 	let signedIn = $state(hasToken());
+	let platform = $state<Platform>(getPlatform());
+	let login = $state<string | null>(getLogin());
 
 	let cards = $state<PRCard[]>([]);
 	let columns = $state<ColumnDef[]>(DEFAULT_CONFIG.columns);
@@ -37,8 +39,7 @@
 		const wasEnabled = enabledRepos.includes(repo);
 		enabledRepos = wasEnabled ? enabledRepos.filter((r) => r !== repo) : [...enabledRepos, repo];
 		if (wasEnabled) {
-			const prefix = `pr_${repo.replace('/', '_')}_`;
-			cards = cards.filter((c) => !c.id.startsWith(prefix));
+			cards = cards.filter((c) => c.repo !== repo);
 		}
 		await board.toggleRepo(repo);
 	}
@@ -134,15 +135,33 @@
 	}
 
 	function onSignedIn() {
+		platform = getPlatform();
+		login = getLogin();
 		signedIn = true;
 		refresh(true);
 	}
 
 	function onSignOut() {
 		signedIn = false;
+		login = null;
 		cards = [];
 		enabledRepos = [];
 		orphans = [];
+	}
+
+	function onSwitchPlatform(next: Platform) {
+		setPlatform(next);
+		platform = next;
+		login = getLogin(next);
+		cards = [];
+		enabledRepos = [];
+		orphans = [];
+		if (hasToken(next)) {
+			signedIn = true;
+			refresh(true);
+		} else {
+			signedIn = false;
+		}
 	}
 
 	let interval: ReturnType<typeof setInterval>;
@@ -178,6 +197,9 @@
 		{mergedRetentionDays}
 		{onSetRetention}
 		{onSignOut}
+		{platform}
+		{login}
+		{onSwitchPlatform}
 		onImported={() => refresh(false)}
 		onRefresh={() => refresh(true)}
 	/>

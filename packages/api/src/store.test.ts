@@ -195,6 +195,20 @@ describe("toggleRepo", () => {
     expect("pr_owner_repo_1" in result.cards).toBe(false);
     expect("pr_other_repo_2" in result.cards).toBe(true);
   });
+
+  it("removes GitLab (mr_) cards, including nested group paths", () => {
+    const s: BoardState = {
+      cards: {
+        mr_grp_sub_proj_1: { column: "inbox", order: 10 },
+        mr_grp_other_2: { column: "inbox", order: 20 },
+      },
+      enabledRepos: ["grp/sub/proj", "grp/other"],
+    };
+    const result = toggleRepo(s, "grp/sub/proj");
+    expect(result.enabledRepos).not.toContain("grp/sub/proj");
+    expect("mr_grp_sub_proj_1" in result.cards).toBe(false);
+    expect("mr_grp_other_2" in result.cards).toBe(true);
+  });
 });
 
 describe("getEnabledRepos", () => {

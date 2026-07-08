@@ -1,19 +1,26 @@
 <script lang="ts">
-	import { clearToken, getLogin } from '$lib/auth';
+	import { clearToken } from '$lib/auth';
 	import { exportData, importData } from '$lib/backup';
+	import type { Platform } from '@review365/api/types';
 
 	let {
+		platform,
+		login,
 		onSignOut,
-		onImported
+		onImported,
+		onSwitchPlatform
 	}: {
+		platform: Platform;
+		login: string | null;
 		onSignOut: () => void;
 		onImported: () => void;
+		onSwitchPlatform: (platform: Platform) => void;
 	} = $props();
 
 	let importStatus = $state('');
 	let fileInput: HTMLInputElement | undefined = $state();
 
-	const login = getLogin();
+	const platformLabel: Record<Platform, string> = { github: 'GitHub', gitlab: 'GitLab' };
 
 	async function handleExport() {
 		const json = await exportData();
@@ -21,7 +28,7 @@
 		const url = URL.createObjectURL(blob);
 		const a = document.createElement('a');
 		a.href = url;
-		a.download = 'review365-backup.json';
+		a.download = `review365-${platform}-backup.json`;
 		a.click();
 		URL.revokeObjectURL(url);
 	}
@@ -41,7 +48,7 @@
 	}
 
 	function handleSignOut() {
-		clearToken();
+		clearToken(platform);
 		onSignOut();
 	}
 </script>
@@ -50,6 +57,7 @@
 	<div class="mb-3 flex items-center justify-between">
 		<div class="text-sm text-neutral-300">
 			Signed in as <strong class="text-neutral-100">@{login}</strong>
+			<span class="text-neutral-500">on {platformLabel[platform]}</span>
 		</div>
 		<button
 			class="rounded-md border border-neutral-700 bg-neutral-800 px-2.5 py-1 text-xs text-neutral-300 transition-colors hover:border-red-500"
@@ -57,6 +65,21 @@
 		>
 			Sign out
 		</button>
+	</div>
+	<div class="mb-3 flex items-center gap-2">
+		<span class="text-xs text-neutral-500">Platform</span>
+		<div class="inline-flex rounded-md border border-neutral-700 p-0.5">
+			{#each ['github', 'gitlab'] as const as p}
+				<button
+					class="rounded px-2.5 py-1 text-xs font-medium transition-colors {platform === p
+						? 'bg-blue-600 text-white'
+						: 'text-neutral-300 hover:text-neutral-100'}"
+					onclick={() => platform !== p && onSwitchPlatform(p)}
+				>
+					{platformLabel[p]}
+				</button>
+			{/each}
+		</div>
 	</div>
 	<div class="flex items-center gap-2">
 		<button

@@ -1,4 +1,5 @@
-import { fetchPRs, fetchOwnedRepos } from "@review365/api/github";
+import { getProvider } from "@review365/api/providers";
+import type { ProviderContext } from "@review365/api/providers";
 import {
   getCardColumn,
   setCardColumn,
@@ -23,26 +24,28 @@ import { SIGNAL_LABELS } from "@review365/api/types";
 import type { BoardState, ColumnId, Signal } from "@review365/api/types";
 import type { BoardConfig } from "@review365/api/config";
 import { boardStore, configStore } from "./local-store";
-import { getToken, getLogin } from "./auth";
+import { getToken, getLogin, getHost, getPlatform } from "./auth";
+import type { Platform } from "@review365/api/types";
 
-function credentials(): { token: string; user: string } {
-  const token = getToken();
-  const user = getLogin();
+function credentials(): { platform: Platform; ctx: ProviderContext } {
+  const platform = getPlatform();
+  const token = getToken(platform);
+  const user = getLogin(platform);
   if (!token || !user) throw new Error("Not signed in");
-  return { token, user };
+  const host = getHost(platform) ?? undefined;
+  return { platform, ctx: { token, user, host } };
 }
 
 export async function listPRs(force = false) {
-  const { token, user } = credentials();
+  const { platform, ctx } = credentials();
   const config = await configStore.load();
   const state = await boardStore.load();
 
-  const prs = await fetchPRs(
-    token,
-    user,
+  const prs = await getProvider(platform).fetchPRs(
+    ctx,
     getEnabledRepos(state),
     force,
-    config.mergedRetentionDays,
+    config.mergedRetentionDays ?? 14,
   );
 
   const cardSignals: Record<string, Signal[]> = {};
@@ -79,8 +82,8 @@ export async function listPRs(force = false) {
 }
 
 export async function searchRepos(q: string): Promise<string[]> {
-  const { token, user } = credentials();
-  return fetchOwnedRepos(token, user, q);
+  const { platform, ctx } = credentials();
+  return getProvider(platform).fetchOwnedRepos(ctx, q);
 }
 
 async function mutateBoard(fn: (state: BoardState) => BoardState): Promise<BoardState> {

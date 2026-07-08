@@ -1,5 +1,7 @@
 export type ColumnId = string;
 
+export type Platform = "github" | "gitlab";
+
 export type Signal =
   | "pr-open"
   | "review-requested"
@@ -29,6 +31,7 @@ export interface BoardConfig {
 
 export interface PRCard {
   id: string;
+  platform: Platform;
   prNumber: number;
   repo: string;
   title: string;
@@ -44,7 +47,10 @@ export interface PRCard {
 }
 
 export interface BoardState {
-  cards: Record<string, { column: ColumnId; order: number; archived?: boolean; manual?: boolean; note?: string }>;
+  cards: Record<
+    string,
+    { column: ColumnId; order: number; archived?: boolean; manual?: boolean; note?: string }
+  >;
   enabledRepos?: string[];
 }
 

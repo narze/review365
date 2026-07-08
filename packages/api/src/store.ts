@@ -98,9 +98,10 @@ export function toggleRepo(state: BoardState, repo: string): BoardState {
 
   const cards = { ...state.cards };
   if (exists) {
-    const prefix = `pr_${repo.replace("/", "_")}_`;
+    const slug = repo.replaceAll("/", "_");
+    const prefixes = [`pr_${slug}_`, `mr_${slug}_`];
     for (const key of Object.keys(cards)) {
-      if (key.startsWith(prefix)) delete cards[key];
+      if (prefixes.some((p) => key.startsWith(p))) delete cards[key];
     }
   }
 
