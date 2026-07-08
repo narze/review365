@@ -96,16 +96,9 @@ export function toggleRepo(state: BoardState, repo: string): BoardState {
   const exists = current.includes(repo);
   const enabledRepos = exists ? current.filter((r) => r !== repo) : [...current, repo];
 
-  const cards = { ...state.cards };
-  if (exists) {
-    const slug = repo.replaceAll("/", "_");
-    const prefixes = [`pr_${slug}_`, `mr_${slug}_`];
-    for (const key of Object.keys(cards)) {
-      if (prefixes.some((p) => key.startsWith(p))) delete cards[key];
-    }
-  }
-
-  return { cards, enabledRepos };
+  // Keep card state (column, notes, manual placement) around while a repo is
+  // unwatched, so re-watching it later restores exactly where things were left.
+  return { ...state, enabledRepos };
 }
 
 export function findOrphanedCards(

@@ -84,6 +84,11 @@
 			cards = cards.filter((c) => c.repo !== repo);
 		}
 		await board.toggleRepo(repo);
+		if (!wasEnabled) {
+			// Newly-watched repo has no cards yet; fetch now instead of waiting for
+			// the next scheduled refresh or a manual page reload.
+			refresh(true);
+		}
 	}
 
 	async function onMoveCard(cardId: string, column: ColumnId) {

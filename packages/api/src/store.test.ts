@@ -181,10 +181,10 @@ describe("toggleRepo", () => {
     expect(result.enabledRepos).toContain("owner/repo");
   });
 
-  it("removes repo and its cards", () => {
+  it("removes repo from enabledRepos but keeps its cards' state", () => {
     const s: BoardState = {
       cards: {
-        pr_owner_repo_1: { column: "inbox", order: 10 },
+        pr_owner_repo_1: { column: "reviewing", order: 10, manual: true },
         pr_other_repo_2: { column: "inbox", order: 20 },
       },
       enabledRepos: ["owner/repo", "other/repo"],
@@ -192,22 +192,25 @@ describe("toggleRepo", () => {
     const result = toggleRepo(s, "owner/repo");
     expect(result.enabledRepos).not.toContain("owner/repo");
     expect(result.enabledRepos).toContain("other/repo");
-    expect("pr_owner_repo_1" in result.cards).toBe(false);
-    expect("pr_other_repo_2" in result.cards).toBe(true);
+    // Card state is preserved (not deleted) so re-watching the repo later
+    // restores the card to wherever it was manually placed.
+    expect(result.cards.pr_owner_repo_1).toEqual({ column: "reviewing", order: 10, manual: true });
+    expect(result.cards.pr_other_repo_2).toEqual({ column: "inbox", order: 20 });
   });
 
-  it("removes GitLab (mr_) cards, including nested group paths", () => {
+  it("restores a card's manual placement when re-watching a repo", () => {
     const s: BoardState = {
-      cards: {
-        mr_grp_sub_proj_1: { column: "inbox", order: 10 },
-        mr_grp_other_2: { column: "inbox", order: 20 },
-      },
-      enabledRepos: ["grp/sub/proj", "grp/other"],
+      cards: { pr_owner_repo_1: { column: "reviewing", order: 10, manual: true } },
+      enabledRepos: ["owner/repo"],
     };
-    const result = toggleRepo(s, "grp/sub/proj");
-    expect(result.enabledRepos).not.toContain("grp/sub/proj");
-    expect("mr_grp_sub_proj_1" in result.cards).toBe(false);
-    expect("mr_grp_other_2" in result.cards).toBe(true);
+    const removed = toggleRepo(s, "owner/repo");
+    const readded = toggleRepo(removed, "owner/repo");
+    expect(readded.enabledRepos).toContain("owner/repo");
+    expect(readded.cards.pr_owner_repo_1).toEqual({
+      column: "reviewing",
+      order: 10,
+      manual: true,
+    });
   });
 });
 
