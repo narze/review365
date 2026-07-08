@@ -5,54 +5,70 @@
 	import type { PRCard, ColumnId, ColumnDef, Signal, Platform } from '@review365/api/types';
 	import { DEFAULT_CONFIG } from '@review365/api/types';
 	import { hasToken, getPlatform, getLogin, setPlatform } from '$lib/auth';
-	import { listPRs, loadCachedBoard, board, config as configService } from '$lib/board-service';
-	import type { BoardSnapshot } from '$lib/board-service';
+	import {
+		listPRs,
+		loadLocalBoard,
+		loadCachedCards,
+		hasCachedCards,
+		board,
+		config as configService
+	} from '$lib/board-service';
 
 	let signedIn = $state(hasToken());
 	let platform = $state<Platform>(getPlatform());
 	let login = $state<string | null>(getLogin());
 
-	const initialSnapshot = hasToken() ? loadCachedBoard() : null;
+	// Repos/columns/rules/retention are pure local config: always read fresh from
+	// localStorage, never round-tripped through a fetch response (see board-service).
+	const initialLocal = hasToken() ? loadLocalBoard() : null;
 
-	let cards = $state<PRCard[]>(initialSnapshot?.cards ?? []);
-	let columns = $state<ColumnDef[]>(initialSnapshot?.columns ?? DEFAULT_CONFIG.columns);
-	let enabledRepos = $state<string[]>(initialSnapshot?.enabledRepos ?? []);
+	let cards = $state<PRCard[]>(hasToken() ? loadCachedCards() : []);
+	let columns = $state<ColumnDef[]>(initialLocal?.columns ?? DEFAULT_CONFIG.columns);
+	let enabledRepos = $state<string[]>(initialLocal?.enabledRepos ?? []);
 	let rules = $state<{ id: string; signal: string; columnId: string }[]>(
-		initialSnapshot?.rules ?? DEFAULT_CONFIG.rules
+		initialLocal?.rules ?? DEFAULT_CONFIG.rules
 	);
-	let orphans = $state<{ cardId: string; column: ColumnId }[]>(initialSnapshot?.orphans ?? []);
-	let signalLabels = $state<Record<string, string>>(initialSnapshot?.signalLabels ?? {});
+	let orphans = $state<{ cardId: string; column: ColumnId }[]>(initialLocal?.orphans ?? []);
+	let signalLabels = $state<Record<string, string>>(initialLocal?.signalLabels ?? {});
 	let mergedRetentionDays = $state<number>(
-		initialSnapshot?.mergedRetentionDays ?? DEFAULT_CONFIG.mergedRetentionDays ?? 14
+		initialLocal?.mergedRetentionDays ?? DEFAULT_CONFIG.mergedRetentionDays ?? 14
 	);
-	// True only while there's no board to show yet (first-ever visit, nothing cached).
-	// Once we have cached or fetched data, later refreshes happen quietly in the background.
-	let loading = $state(hasToken() && !initialSnapshot);
+	// True only while there are no cards to show yet (first-ever visit, nothing fetched).
+	// Once we have cached or fetched cards, later refreshes happen quietly in the background.
+	let loading = $state(hasToken() && !hasCachedCards());
 	let online = $state(typeof navigator === 'undefined' || navigator.onLine);
+	// Bumped by every local card edit (repo toggle, move, archive, note...) so a fetch that
+	// was already in flight when the edit happened doesn't resolve and overwrite it with
+	// the pre-edit state it captured when it started.
+	let cardsEditSeq = 0;
 
-	/** Paints a platform's last-known board immediately, before the network refresh resolves. */
-	function hydrate(snapshot: BoardSnapshot | null) {
-		cards = snapshot?.cards ?? [];
-		columns = snapshot?.columns ?? DEFAULT_CONFIG.columns;
-		enabledRepos = snapshot?.enabledRepos ?? [];
-		rules = snapshot?.rules ?? DEFAULT_CONFIG.rules;
-		orphans = snapshot?.orphans ?? [];
-		signalLabels = snapshot?.signalLabels ?? {};
-		mergedRetentionDays = snapshot?.mergedRetentionDays ?? DEFAULT_CONFIG.mergedRetentionDays ?? 14;
-		loading = !snapshot;
+	/** Paints a platform's local config + last-known cards immediately, before any fetch resolves. */
+	function hydrate() {
+		const local = loadLocalBoard();
+		columns = local.columns;
+		enabledRepos = local.enabledRepos;
+		rules = local.rules;
+		orphans = local.orphans;
+		signalLabels = local.signalLabels;
+		mergedRetentionDays = local.mergedRetentionDays;
+		cards = loadCachedCards();
+		loading = !hasCachedCards();
 	}
 
 	async function refresh(force = false) {
 		if (!signedIn || !online) return;
+		const seq = cardsEditSeq;
 		try {
 			const data = await listPRs(force);
+			if (cardsEditSeq !== seq) {
+				// A card edit landed locally while this fetch was in flight; applying its
+				// result now would revert that edit, so refetch instead of overwriting it.
+				await refresh(force);
+				return;
+			}
 			cards = data.cards;
-			columns = data.columns;
-			enabledRepos = data.enabledRepos;
-			rules = data.rules;
 			orphans = data.orphans;
 			signalLabels = data.signalLabels;
-			mergedRetentionDays = data.mergedRetentionDays;
 		} catch {
 			// GitHub unreachable or token revoked; keep last known board
 		} finally {
@@ -61,6 +77,7 @@
 	}
 
 	async function onToggleRepo(repo: string) {
+		cardsEditSeq++;
 		const wasEnabled = enabledRepos.includes(repo);
 		enabledRepos = wasEnabled ? enabledRepos.filter((r) => r !== repo) : [...enabledRepos, repo];
 		if (wasEnabled) {
@@ -70,6 +87,7 @@
 	}
 
 	async function onMoveCard(cardId: string, column: ColumnId) {
+		cardsEditSeq++;
 		cards = cards.map((c) =>
 			c.id === cardId ? { ...c, columnId: column, order: Date.now() } : c
 		);
@@ -77,6 +95,7 @@
 	}
 
 	async function onReorderCard(cardId: string, targetCardId: string | null, column: ColumnId) {
+		cardsEditSeq++;
 		cards = cards.map((c) =>
 			c.id === cardId ? { ...c, columnId: column } : c
 		);
@@ -109,16 +128,19 @@
 	}
 
 	async function onArchiveCard(cardId: string) {
+		cardsEditSeq++;
 		cards = cards.map((c) => (c.id === cardId ? { ...c, archived: true } : c));
 		await board.archiveCard(cardId);
 	}
 
 	async function onUnarchiveCard(cardId: string) {
+		cardsEditSeq++;
 		cards = cards.map((c) => (c.id === cardId ? { ...c, archived: false } : c));
 		await board.unarchiveCard(cardId);
 	}
 
 	async function onUpdateNote(cardId: string, note: string) {
+		cardsEditSeq++;
 		cards = cards.map((c) => (c.id === cardId ? { ...c, note: note || undefined } : c));
 		await board.updateNote(cardId, note);
 	}
@@ -163,7 +185,7 @@
 		platform = getPlatform();
 		login = getLogin();
 		signedIn = true;
-		hydrate(loadCachedBoard());
+		hydrate();
 		refresh(true);
 	}
 
@@ -179,7 +201,7 @@
 		setPlatform(next);
 		platform = next;
 		login = getLogin(next);
-		hydrate(loadCachedBoard());
+		hydrate();
 		if (hasToken(next)) {
 			signedIn = true;
 			refresh(true);
@@ -241,7 +263,10 @@
 		{onSwitchPlatform}
 		{loading}
 		{online}
-		onImported={() => refresh(false)}
+		onImported={() => {
+			hydrate();
+			refresh(true);
+		}}
 		onRefresh={() => refresh(true)}
 	/>
 {/if}

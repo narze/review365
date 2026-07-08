@@ -21,9 +21,9 @@ import {
   deleteRule,
 } from "@review365/api/config";
 import { SIGNAL_LABELS } from "@review365/api/types";
-import type { BoardState, ColumnId, Signal } from "@review365/api/types";
+import type { BoardState, ColumnId, PRCard, Signal } from "@review365/api/types";
 import type { BoardConfig } from "@review365/api/config";
-import { boardStore, configStore } from "./local-store";
+import { boardStore, configStore, loadBoardState, loadBoardConfig } from "./local-store";
 import { getToken, getLogin, getHost, getPlatform } from "./auth";
 import type { Platform } from "@review365/api/types";
 
@@ -36,29 +36,64 @@ function credentials(): { platform: Platform; ctx: ProviderContext } {
   return { platform, ctx: { token, user, host } };
 }
 
-export type BoardSnapshot = Awaited<ReturnType<typeof listPRs>>;
-
-function snapshotKey(platform: Platform = getPlatform()): string {
-  return `review365:snapshot:${platform}`;
+/**
+ * Repos/columns/rules/retention are pure local config — never worth round-tripping
+ * through a fetch response, since a slow or in-flight `listPRs` call would otherwise
+ * resolve with whatever this looked like when the fetch *started* and clobber any
+ * edit (toggle a repo, rename a column) made in the meantime. Read fresh every time.
+ */
+export function loadLocalBoard() {
+  const config = loadBoardConfig();
+  const state = loadBoardState();
+  return {
+    columns: config.columns,
+    enabledRepos: getEnabledRepos(state),
+    rules: config.rules,
+    orphans: findOrphanedCards(state, config),
+    signalLabels: SIGNAL_LABELS,
+    mergedRetentionDays: config.mergedRetentionDays ?? 14,
+  };
 }
 
-/**
- * Last board this platform successfully loaded. Lets the UI paint the previous
- * cards/columns immediately on mount instead of a blank state while `listPRs`
- * makes its network round trip.
- */
-export function loadCachedBoard(): BoardSnapshot | null {
+function cardsCacheKey(platform: Platform = getPlatform()): string {
+  return `review365:cards:${platform}`;
+}
+
+function loadCachedCardsRaw(): PRCard[] | null {
   try {
-    const raw = localStorage.getItem(snapshotKey());
-    return raw ? (JSON.parse(raw) as BoardSnapshot) : null;
+    const raw = localStorage.getItem(cardsCacheKey());
+    return raw ? (JSON.parse(raw) as PRCard[]) : null;
   } catch {
     return null;
   }
 }
 
-function cacheBoard(snapshot: BoardSnapshot): void {
+/** Whether this platform has ever completed a fetch, so callers can tell "loading" apart from "genuinely no PRs". */
+export function hasCachedCards(): boolean {
+  return loadCachedCardsRaw() !== null;
+}
+
+/**
+ * PR cards from the last successful fetch — the only thing that genuinely needs the
+ * network, since it's live PR/MR data. Re-applies the current column/archived/note
+ * so a reload reflects local edits made since that fetch, not the stale snapshot of them.
+ */
+export function loadCachedCards(): PRCard[] {
+  const cached = loadCachedCardsRaw();
+  if (!cached) return [];
+  const state = loadBoardState();
+  return cached.map((pr) => ({
+    ...pr,
+    columnId: getCardColumn(state, pr.id),
+    archived: state.cards[pr.id]?.archived ?? false,
+    order: state.cards[pr.id]?.order ?? pr.order,
+    note: state.cards[pr.id]?.note,
+  }));
+}
+
+function cacheCards(cards: PRCard[]): void {
   try {
-    localStorage.setItem(snapshotKey(), JSON.stringify(snapshot));
+    localStorage.setItem(cardsCacheKey(), JSON.stringify(cards));
   } catch {
     // storage full or unavailable; skip caching
   }
@@ -98,17 +133,13 @@ export async function listPRs(force = false) {
 
   const orphans = findOrphanedCards(automatedState, config);
 
-  const result = {
-    columns: config.columns,
+  cacheCards(cards);
+
+  return {
     cards,
-    enabledRepos: getEnabledRepos(automatedState),
-    rules: config.rules,
     orphans,
     signalLabels: SIGNAL_LABELS,
-    mergedRetentionDays: config.mergedRetentionDays ?? 14,
   };
-  cacheBoard(result);
-  return result;
 }
 
 export async function searchRepos(q: string): Promise<string[]> {

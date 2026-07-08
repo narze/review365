@@ -20,15 +20,35 @@ export function configKey(platform?: Platform): string {
   return scopedKey(CONFIG_BASE, platform);
 }
 
+/**
+ * Synchronous reads of the board/config, for callers that need them before an
+ * async round trip makes sense (e.g. painting initial UI state on mount). Board
+ * and config are pure localStorage — never worth caching separately, since a
+ * separate cache can only ever be as fresh as the last time it was written, and
+ * would go stale the moment a local edit (toggle a repo, move a card) landed
+ * without also refreshing that cache.
+ */
+export function loadBoardState(): BoardState {
+  try {
+    const data = localStorage.getItem(boardKey());
+    return data ? (JSON.parse(data) as BoardState) : { cards: {} };
+  } catch {
+    return { cards: {} };
+  }
+}
+
+export function loadBoardConfig(): BoardConfig {
+  try {
+    const data = localStorage.getItem(configKey());
+    return data ? (JSON.parse(data) as BoardConfig) : createDefaultConfig();
+  } catch {
+    return createDefaultConfig();
+  }
+}
+
 export class LocalBoardStore implements BoardStore {
   async load(): Promise<BoardState> {
-    try {
-      const data = localStorage.getItem(boardKey());
-      if (!data) return { cards: {} };
-      return JSON.parse(data) as BoardState;
-    } catch {
-      return { cards: {} };
-    }
+    return loadBoardState();
   }
 
   async save(state: BoardState): Promise<void> {
@@ -38,13 +58,7 @@ export class LocalBoardStore implements BoardStore {
 
 export class LocalConfigStore implements ConfigStore {
   async load(): Promise<BoardConfig> {
-    try {
-      const data = localStorage.getItem(configKey());
-      if (!data) return createDefaultConfig();
-      return JSON.parse(data) as BoardConfig;
-    } catch {
-      return createDefaultConfig();
-    }
+    return loadBoardConfig();
   }
 
   async save(config: BoardConfig): Promise<void> {
