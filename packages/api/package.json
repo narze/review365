@@ -2,6 +2,9 @@
   "name": "@review365/api",
   "type": "module",
   "exports": {
+    "./providers": {
+      "default": "./src/providers/index.ts"
+    },
     "./*": {
       "default": "./src/*.ts"
     }

@@ -1,4 +1,5 @@
-import type { PRCard, Signal } from "./types";
+import type { PRCard, Signal } from "../types";
+import type { ProviderContext, ReviewProvider } from "./types";
 
 const GITHUB_API = "https://api.github.com";
 
@@ -51,13 +52,14 @@ async function ghFetch<T>(token: string, path: string): Promise<T> {
 
 function prKey(pr: GHPR): string {
   const repo = pr.repository_url.split("/repos/")[1] || "unknown";
-  return `pr_${repo.replace("/", "_")}_${pr.number}`;
+  return `pr_${repo.replaceAll("/", "_")}_${pr.number}`;
 }
 
 function toPRCard(pr: GHPR, isOwnPR: boolean, signals: Signal[] = []): PRCard {
   const repo = pr.repository_url.split("/repos/")[1] || "unknown";
   return {
     id: prKey(pr),
+    platform: "github",
     prNumber: pr.number,
     repo,
     title: pr.title,
@@ -110,14 +112,14 @@ async function fetchReviews(token: string, repo: string, prNumber: number): Prom
   return reviews;
 }
 
-export async function fetchPRs(
-  token: string,
-  user: string,
+async function fetchPRs(
+  ctx: ProviderContext,
   enabledRepos: string[] = [],
   force = false,
   mergedRetentionDays = 14,
 ): Promise<PRCard[]> {
-  const cacheKey = `${user}:${enabledRepos.sort().join(",")}:${mergedRetentionDays}`;
+  const { token, user } = ctx;
+  const cacheKey = `${user}:${enabledRepos.slice().sort().join(",")}:${mergedRetentionDays}`;
 
   if (!force && prsCache && prsCache.key === cacheKey && Date.now() - prsCache.ts < PRS_TTL_MS) {
     const prs = structuredClone(prsCache.prs);
@@ -233,11 +235,8 @@ async function enrichWithReviewSignals(
   }
 }
 
-export async function fetchOwnedRepos(
-  token: string,
-  user: string,
-  query: string,
-): Promise<string[]> {
+async function fetchOwnedRepos(ctx: ProviderContext, query: string): Promise<string[]> {
+  const { token, user } = ctx;
   const cacheKey = `${user}:${query}`;
   const cached = repoSearchCache.get(cacheKey);
   if (cached && Date.now() - cached.ts < REPO_SEARCH_TTL_MS) {
@@ -257,6 +256,17 @@ export async function fetchOwnedRepos(
   return repos;
 }
 
-export function invalidatePrsCache() {
-  prsCache = null;
+async function validateToken(token: string): Promise<{ user: string }> {
+  const res = await ghFetch<{ login: string }>(token, "/user");
+  return { user: res.login };
 }
+
+export const githubProvider: ReviewProvider = {
+  platform: "github",
+  validateToken,
+  fetchPRs,
+  fetchOwnedRepos,
+  invalidateCache() {
+    prsCache = null;
+  },
+};

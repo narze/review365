@@ -1,11 +1,15 @@
 # Review365
 
-A Kanban board for tracking GitHub PR reviews across your repos. Polls GitHub, filters by a repo watchlist, and persists board state locally.
+A Kanban board for tracking PR/MR reviews across your repos. Works with GitHub or GitLab, one platform per board (switch in Settings). Polls the active platform, filters by a repo watchlist, and persists board state locally per platform.
 
 ## Language
 
+**Platform**:
+The review source a board is connected to — GitHub or GitLab. Chosen at sign-in and switchable in Settings. Each platform has its own credentials and its own board state; a board shows one platform at a time.
+_Avoid_: Provider, source, backend
+
 **PR Card**:
-A GitHub pull request displayed on the board. Has a repo, number, title, author, and a column it belongs to.
+A GitHub pull request or GitLab merge request displayed on the board. Has a platform, repo, number, title, author, and a column it belongs to.
 _Avoid_: Issue, ticket, item
 
 **Column**:

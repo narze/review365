@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { PRCard, ColumnId, ColumnDef } from '@review365/api/types';
+	import type { PRCard, ColumnId, ColumnDef, Platform } from '@review365/api/types';
 	import KanbanColumn from './KanbanColumn.svelte';
 	import RepoFilter from './RepoFilter.svelte';
 	import ColumnManager from './ColumnManager.svelte';
@@ -30,7 +30,10 @@
 		mergedRetentionDays = 14,
 		onSetRetention,
 		onSignOut,
-		onImported
+		onImported,
+		platform,
+		login,
+		onSwitchPlatform
 	}: {
 		cards: PRCard[];
 		columns: ColumnDef[];
@@ -55,6 +58,9 @@
 		onSetRetention: (days: number) => void;
 		onSignOut: () => void;
 		onImported: () => void;
+		platform: Platform;
+		login: string | null;
+		onSwitchPlatform: (platform: Platform) => void;
 	} = $props();
 
 	let showSettings = $state(false);
@@ -206,7 +212,7 @@
 {#if showSettings}
 	<div class="border-b border-neutral-800 bg-neutral-900 p-4">
 		<div class="mx-auto max-w-3xl grid gap-6">
-			<AccountSettings {onSignOut} {onImported} />
+			<AccountSettings {platform} {login} {onSignOut} {onImported} {onSwitchPlatform} />
 			<ColumnManager {columns} onAdd={onAddColumn} onRename={onRenameColumn} onDelete={onDeleteColumn} />
 			<RuleManager {columns} {rules} {signalLabels} onAdd={onAddRule} onDelete={onDeleteRule} />
 			<div class="flex items-center gap-3 rounded-lg border border-neutral-800 p-4">
