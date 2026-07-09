@@ -87,6 +87,9 @@
 			cards = cards.filter((c) => c.repo !== repo);
 		}
 		await board.toggleRepo(repo);
+		if (!wasEnabled) {
+			await refresh(true);
+		}
 	}
 
 	async function onMoveCard(cardId: string, column: ColumnId) {

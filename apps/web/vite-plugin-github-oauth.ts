@@ -9,6 +9,7 @@ import {
   exchangeCodeForToken,
   getAppOrigin,
   getOAuthConfig,
+  isGitHubAppClientId,
   oauthErrorRedirect,
   oauthSuccessRedirect,
   randomState,
@@ -53,6 +54,10 @@ export function githubOAuthDevPlugin(): Plugin {
         if (pathname === "/api/auth/github/start") {
           if (!configured) {
             sendRedirect(res, oauthErrorRedirect(origin, "oauth_not_configured"));
+            return;
+          }
+          if (isGitHubAppClientId(clientId)) {
+            sendRedirect(res, oauthErrorRedirect(origin, "github_app_not_supported"));
             return;
           }
           const state = randomState();

@@ -4,6 +4,11 @@ export const GITHUB_OAUTH_SCOPES = "repo read:org";
 export const STATE_COOKIE = "review365_gh_oauth_state";
 export const STATE_MAX_AGE_SEC = 600;
 
+/** GitHub Apps use client IDs starting with `Iv`; OAuth Apps use `Ov`. This flow requires an OAuth App. */
+export function isGitHubAppClientId(clientId: string): boolean {
+  return clientId.trim().startsWith("Iv");
+}
+
 export type OAuthConfig = {
   clientId: string;
   clientSecret: string;

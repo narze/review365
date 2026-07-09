@@ -27,9 +27,9 @@ interface GHSearchResponse {
   items: GHSearchItem[];
 }
 
-interface GHRepoSearchResponse {
-  total_count: number;
-  items: { full_name: string; archived: boolean }[];
+interface GHRepoListItem {
+  full_name: string;
+  archived: boolean;
 }
 
 interface GHOrg {
@@ -57,6 +57,23 @@ async function ghFetch<T>(token: string, path: string): Promise<T> {
   const res = await fetch(url, { headers: headers(token) });
   if (!res.ok) throw new Error(`GitHub API ${res.status}: ${await res.text()}`);
   return res.json() as Promise<T>;
+}
+
+async function ghFetchAllPages<T>(token: string, path: string, maxPages = 10): Promise<T[]> {
+  const items: T[] = [];
+  let nextUrl: string | null = path.startsWith("http") ? path : `${GITHUB_API}${path}`;
+
+  for (let page = 0; page < maxPages && nextUrl; page++) {
+    const res = await fetch(nextUrl, { headers: headers(token) });
+    if (!res.ok) throw new Error(`GitHub API ${res.status}: ${await res.text()}`);
+    const batch = (await res.json()) as T[];
+    if (batch.length === 0) break;
+    items.push(...batch);
+    const link = res.headers.get("Link");
+    nextUrl = link?.match(/<([^>]+)>;\s*rel="next"/)?.[1] ?? null;
+  }
+
+  return items;
 }
 
 function prKey(repo: string, number: number): string {
@@ -97,8 +114,8 @@ let orgsCache: { user: string; orgs: string[]; ts: number } | null = null;
 const REVIEW_TTL_MS = 10 * 60 * 1000;
 const reviewCache = new Map<string, { reviews: GHReview[]; ts: number }>();
 
-const REPO_SEARCH_TTL_MS = 5 * 60 * 1000;
-const repoSearchCache = new Map<string, { repos: string[]; ts: number }>();
+const ACCESSIBLE_REPOS_TTL_MS = 5 * 60 * 1000;
+let accessibleReposCache: { user: string; repos: string[]; ts: number } | null = null;
 
 async function fetchUserOrgs(token: string, user: string): Promise<string[]> {
   if (orgsCache && orgsCache.user === user && Date.now() - orgsCache.ts < ORGS_TTL_MS) {
@@ -247,25 +264,51 @@ async function enrichWithReviewSignals(
   });
 }
 
-async function fetchOwnedRepos(ctx: ProviderContext, query: string): Promise<string[]> {
-  const { token, user } = ctx;
-  const cacheKey = `${user}:${query}`;
-  const cached = repoSearchCache.get(cacheKey);
-  if (cached && Date.now() - cached.ts < REPO_SEARCH_TTL_MS) {
-    return cached.repos;
+async function fetchAccessibleRepoNames(token: string, user: string): Promise<string[]> {
+  if (
+    accessibleReposCache &&
+    accessibleReposCache.user === user &&
+    Date.now() - accessibleReposCache.ts < ACCESSIBLE_REPOS_TTL_MS
+  ) {
+    return accessibleReposCache.repos;
   }
 
   const orgs = await fetchUserOrgs(token, user);
-  const parts = [`user:${user}`, ...orgs.map((o) => `org:${o}`)];
-  if (query) parts.push(query);
-  const q = parts.join(" ");
-  const res = await ghFetch<GHRepoSearchResponse>(
-    token,
-    `/search/repositories?q=${encodeURIComponent(q)}&per_page=100`,
-  );
-  const repos = res.items.filter((r) => !r.archived).map((r) => r.full_name);
-  repoSearchCache.set(cacheKey, { repos, ts: Date.now() });
+  const [userRepos, ...orgRepoLists] = await Promise.all([
+    ghFetchAllPages<GHRepoListItem>(
+      token,
+      "/user/repos?affiliation=owner,collaborator,organization_member&per_page=100&sort=updated",
+    ),
+    ...orgs.map(async (org) => {
+      try {
+        return await ghFetchAllPages<GHRepoListItem>(
+          token,
+          `/orgs/${org}/repos?type=all&per_page=100&sort=updated`,
+        );
+      } catch {
+        // Org may block third-party OAuth apps from listing private repos.
+        return [];
+      }
+    }),
+  ]);
+
+  const names = new Set<string>();
+  for (const repo of [...userRepos, ...orgRepoLists.flat()]) {
+    if (!repo.archived) names.add(repo.full_name);
+  }
+
+  const repos = [...names].sort((a, b) => a.localeCompare(b));
+  accessibleReposCache = { user, repos, ts: Date.now() };
   return repos;
+}
+
+async function fetchOwnedRepos(ctx: ProviderContext, query: string): Promise<string[]> {
+  const { token, user } = ctx;
+  const q = query.trim().toLowerCase();
+  if (!q) return [];
+
+  const all = await fetchAccessibleRepoNames(token, user);
+  return all.filter((name) => name.toLowerCase().includes(q));
 }
 
 async function validateToken(token: string): Promise<{ user: string }> {
@@ -280,5 +323,6 @@ export const githubProvider: ReviewProvider = {
   fetchOwnedRepos,
   invalidateCache() {
     prsCache = null;
+    accessibleReposCache = null;
   },
 };

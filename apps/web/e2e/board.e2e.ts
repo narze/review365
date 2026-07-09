@@ -54,10 +54,14 @@ async function mockGitHub(page: Page, opts: { open?: GHItem[]; merged?: GHItem[]
       await route.fulfill({ json: [] });
       return;
     }
-    if (url.pathname === "/search/repositories") {
+    if (url.pathname === "/user/repos") {
       await route.fulfill({
-        json: { total_count: 1, items: [{ full_name: REPO, archived: false }] },
+        json: [{ full_name: REPO, archived: false }],
       });
+      return;
+    }
+    if (/^\/orgs\/.+\/repos$/.test(url.pathname)) {
+      await route.fulfill({ json: [] });
       return;
     }
     if (/^\/users\/.+\/orgs$/.test(url.pathname)) {
@@ -241,6 +245,22 @@ test.describe("Review365", () => {
 
       await page.mouse.up();
     }
+  });
+
+  test("repo filter: adding a repo fetches its PRs immediately", async ({ page }) => {
+    await seedAuth(page, { enabledRepos: [] });
+    await mockGitHub(page, { open: [ghItem(1, "Fresh PR")] });
+
+    await page.goto("/", { waitUntil: "networkidle" });
+    await page.locator("h1").waitFor({ state: "visible" });
+
+    await page.getByRole("button", { name: /Repos \(0\)/ }).click();
+    await page.getByPlaceholder("Type to search your repos...").fill("test");
+    await expect(page.getByText(REPO)).toBeVisible({ timeout: 3000 });
+    await page.getByText(REPO).click();
+
+    await expect(page.getByText("Fresh PR")).toBeVisible({ timeout: 5000 });
+    await expect(page.getByRole("button", { name: /Repos \(1\)/ })).toBeVisible();
   });
 
   test("export excludes token, import restores board", async ({ page }) => {

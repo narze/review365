@@ -4,6 +4,7 @@ import {
   callbackRedirectUri,
   getAppOrigin,
   getOAuthConfig,
+  isGitHubAppClientId,
   oauthErrorRedirect,
   oauthSuccessRedirect,
   readCookie,
@@ -58,5 +59,11 @@ describe("github-oauth helpers", () => {
   test("readCookie parses state cookie", () => {
     expect(readCookie(`${STATE_COOKIE}=xyz; Path=/`, STATE_COOKIE)).toBe("xyz");
     expect(readCookie("other=1", STATE_COOKIE)).toBeNull();
+  });
+
+  test("isGitHubAppClientId detects GitHub App client IDs", () => {
+    expect(isGitHubAppClientId("Iv23li8ilCQ8mH7qTsH5")).toBe(true);
+    expect(isGitHubAppClientId("Ov23liexampleoauthapp")).toBe(false);
+    expect(isGitHubAppClientId("")).toBe(false);
   });
 });

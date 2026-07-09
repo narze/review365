@@ -78,6 +78,8 @@ export function beginGitHubOAuth(): void {
 const OAUTH_ERROR_MESSAGES: Record<string, string> = {
   oauth_not_configured:
     "GitHub OAuth is not configured on this deployment. Use a personal access token instead, or set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET.",
+  github_app_not_supported:
+    "This deployment is using a GitHub App client ID (Iv…). Review365 needs a classic OAuth App (Ov…) so GitHub can request repo + read:org scopes and show organization access. Ask the site owner to create an OAuth App at github.com/settings/developers, or use a personal access token instead.",
   invalid_state: "GitHub sign-in expired or was tampered with. Please try again.",
   access_denied: "GitHub authorization was cancelled.",
   token_exchange_failed: "Could not complete GitHub sign-in. Please try again.",
