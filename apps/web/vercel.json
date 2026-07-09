@@ -3,5 +3,9 @@
   "framework": null,
   "installCommand": "cd ../.. && bun install",
   "buildCommand": "bun run build",
-  "outputDirectory": "build"
+  "outputDirectory": "build",
+  "cleanUrls": true,
+  "rewrites": [
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
+  ]
 }

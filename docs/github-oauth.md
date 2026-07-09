@@ -33,7 +33,8 @@ the server on the final page load and is less likely to appear in Referer logs.
 Vercel **Root Directory** is `apps/web` (matches this project's dashboard setting).
 OAuth handlers live at `apps/web/api/auth/github/` and deploy as Edge Functions
 alongside the static site. Shared helpers: `apps/web/api/_lib/github-oauth.ts`.
-Config: `apps/web/vercel.json`.
+Config: `apps/web/vercel.json` (`cleanUrls` so `/settings/oauth` serves
+`settings/oauth.html`; SPA rewrite for other client routes; `/api/*` excluded).
 
 Set `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` in the project env.
 Callback URL: `https://<your-domain>/api/auth/github/callback`
