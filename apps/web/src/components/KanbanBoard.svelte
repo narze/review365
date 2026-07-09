@@ -274,7 +274,7 @@
 		</div>
 	{/if}
 {:else}
-	<div class="flex min-h-[calc(100vh-65px)] items-start gap-4 overflow-x-auto p-6">
+	<div class="thin-scrollbar flex min-h-[calc(100vh-65px)] items-start gap-4 overflow-x-auto p-6">
 		{#each columns as col (col.id)}
 			<div
 				role="presentation"
