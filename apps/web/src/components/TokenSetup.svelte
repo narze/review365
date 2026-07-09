@@ -36,10 +36,11 @@
 
 <div class="flex min-h-[60vh] items-center justify-center p-6">
 	<div class="w-full max-w-lg rounded-xl border border-panel surface-panel p-6">
-		<h1 class="mb-1 text-xl font-bold text-heading">Welcome to Review365</h1>
+		<a href="/" class="mb-3 inline-block text-xs text-faint hover:text-body">← Back</a>
+		<h1 class="mb-1 text-xl font-bold text-heading">Connect your account</h1>
 		<p class="mb-4 text-sm text-muted">
-			A kanban board for your pull/merge request reviews. Everything runs in your browser — your
-			token and board state are stored locally and only ever sent to your chosen provider.
+			Everything runs in your browser — your token and board state are stored locally and only
+			ever sent to your chosen provider.
 		</p>
 
 		<div class="mb-4 inline-flex rounded-md border border-control p-0.5">
@@ -95,7 +96,7 @@
 			disabled={!token.trim() || saving}
 			onclick={submit}
 		>
-			{saving ? 'Validating...' : 'Sign in'}
+			{saving ? 'Validating...' : 'Connect account'}
 		</button>
 
 		<div class="mt-5 rounded-md border border-panel surface-sunken p-3 text-xs text-muted">
