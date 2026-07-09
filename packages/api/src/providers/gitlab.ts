@@ -13,8 +13,8 @@ interface GLMr {
   draft?: boolean;
   work_in_progress?: boolean;
   author: { username: string } | null;
+  reviewers?: { username: string }[] | null;
   project_id: number;
-  references?: { full: string };
 }
 
 interface GLProject {
@@ -41,14 +41,6 @@ async function glFetch<T>(token: string, host: string | undefined, path: string)
   return res.json() as Promise<T>;
 }
 
-/** Derives the `group/project` path from an MR. Prefers references.full, falls back to the web URL. */
-function mrRepo(mr: GLMr): string {
-  const full = mr.references?.full;
-  if (full) return full.split("!")[0] ?? full;
-  const m = mr.web_url.match(/^https?:\/\/[^/]+\/(.+?)\/-\/merge_requests\//);
-  return m?.[1] ?? "unknown";
-}
-
 function mrKey(repo: string, iid: number): string {
   return `mr_${repo.replaceAll("/", "_")}_${iid}`;
 }
@@ -57,8 +49,7 @@ function isDraft(mr: GLMr): boolean {
   return mr.draft ?? mr.work_in_progress ?? false;
 }
 
-function toPRCard(mr: GLMr, isOwnPR: boolean, signals: Signal[] = []): PRCard {
-  const repo = mrRepo(mr);
+function toPRCard(repo: string, mr: GLMr, isOwnPR: boolean, signals: Signal[] = []): PRCard {
   return {
     id: mrKey(repo, mr.iid),
     platform: "gitlab",
@@ -108,8 +99,22 @@ async function fetchApproved(
   return approved;
 }
 
-/** MRs merge across three queries by card id; keep project ids for the approvals lookup. */
+/** MRs merge across two queries by card id; keep project ids for the approvals lookup. */
 type WorkingCard = PRCard & { signals: Signal[]; projectId: number };
+
+async function fetchProjectMRs(
+  token: string,
+  host: string | undefined,
+  repo: string,
+  state: "opened" | "merged",
+  extra = "",
+): Promise<GLMr[]> {
+  return glFetch<GLMr[]>(
+    token,
+    host,
+    `/projects/${encodeURIComponent(repo)}/merge_requests?state=${state}&per_page=100${extra}`,
+  );
+}
 
 async function fetchPRs(
   ctx: ProviderContext,
@@ -124,71 +129,56 @@ async function fetchPRs(
     return structuredClone(prsCache.prs);
   }
 
+  if (enabledRepos.length === 0) {
+    prsCache = { key: cacheKey, prs: [], ts: Date.now() };
+    return [];
+  }
+
   const cardMap = new Map<string, WorkingCard>();
-
-  const add = (mr: GLMr, isOwnPR: boolean, signals: Signal[]) => {
-    const repo = mrRepo(mr);
-    const id = mrKey(repo, mr.iid);
-    if (!cardMap.has(id)) {
-      cardMap.set(id, { ...toPRCard(mr, isOwnPR, signals), projectId: mr.project_id });
-    }
-    return cardMap.get(id)!;
-  };
-
-  // Independent list queries: run concurrently instead of one round trip at a time.
   const cutoff = new Date(Date.now() - mergedRetentionDays * 86400000).toISOString();
-  const [reviewResult, ownResult, mergedResult] = await Promise.all([
-    glFetch<GLMr[]>(
-      token,
-      host,
-      `/merge_requests?scope=all&reviewer_username=${encodeURIComponent(user)}&state=opened&per_page=50`,
-    ),
-    glFetch<GLMr[]>(
-      token,
-      host,
-      `/merge_requests?scope=all&author_username=${encodeURIComponent(user)}&state=opened&per_page=50`,
-    ),
-    glFetch<GLMr[]>(
-      token,
-      host,
-      `/merge_requests?scope=all&author_username=${encodeURIComponent(user)}&state=merged&updated_after=${cutoff}&per_page=20`,
-    ),
-  ]);
 
-  // 1. MRs where the user is a requested reviewer
-  for (const mr of reviewResult) {
-    const signals: Signal[] = ["pr-open", "review-requested"];
-    if (isDraft(mr)) signals.push("draft");
-    add(mr, false, signals);
-  }
+  // One repo's fetch doesn't wait on another's: run the whole watchlist concurrently.
+  await mapWithConcurrency(enabledRepos, 8, async (repo) => {
+    const [openMrs, mergedMrs] = await Promise.all([
+      fetchProjectMRs(token, host, repo, "opened"),
+      fetchProjectMRs(token, host, repo, "merged", `&updated_after=${cutoff}`),
+    ]);
 
-  // 2. MRs authored by the user (own MRs)
-  for (const mr of ownResult) {
-    const signals: Signal[] = ["pr-open", "own-pr"];
-    if (isDraft(mr)) signals.push("draft");
-    add(mr, true, signals);
-  }
+    // 1. All open MRs in the project (unless draft), not just ones involving the user
+    for (const mr of openMrs) {
+      if (isDraft(mr)) continue;
+      const isOwnPR = mr.author?.username === user;
+      const signals: Signal[] = ["pr-open"];
+      if (isOwnPR) signals.push("own-pr");
+      if (mr.reviewers?.some((r) => r.username === user)) signals.push("review-requested");
+      cardMap.set(mrKey(repo, mr.iid), { ...toPRCard(repo, mr, isOwnPR, signals), projectId: mr.project_id });
+    }
 
-  // 3. Recently merged MRs (own, within configured retention)
-  for (const mr of mergedResult) {
-    const card = add(mr, true, ["merged", "own-pr"]);
-    if (!card.signals.includes("merged")) card.signals.push("merged");
-  }
-
-  // 4. Approval status only for MRs in the watchlist (approvals-only; no changes-requested on GitLab)
-  if (enabledRepos.length > 0) {
-    const watchlisted = [...cardMap.values()].filter(
-      (c) => !c.signals.includes("merged") && enabledRepos.includes(c.repo),
-    );
-    await mapWithConcurrency(watchlisted, 8, async (card) => {
-      try {
-        const approved = await fetchApproved(token, host, card.projectId, card.prNumber);
-        if (approved && !card.signals.includes("approved")) card.signals.push("approved");
-      } catch {
-        // MR may be from a project we can't read approvals for
+    // 2. Recently merged MRs (any author, within configured retention)
+    for (const mr of mergedMrs) {
+      const id = mrKey(repo, mr.iid);
+      const existing = cardMap.get(id);
+      if (existing) {
+        if (!existing.signals.includes("merged")) existing.signals.push("merged");
+      } else {
+        const isOwnPR = mr.author?.username === user;
+        const signals: Signal[] = ["merged"];
+        if (isOwnPR) signals.push("own-pr");
+        cardMap.set(id, { ...toPRCard(repo, mr, isOwnPR, signals), projectId: mr.project_id });
       }
-    });
-  }
+    }
+  });
+
+  // Approval status (approvals-only; no changes-requested on GitLab)
+  const watchlisted = [...cardMap.values()].filter((c) => !c.signals.includes("merged"));
+  await mapWithConcurrency(watchlisted, 8, async (card) => {
+    try {
+      const approved = await fetchApproved(token, host, card.projectId, card.prNumber);
+      if (approved && !card.signals.includes("approved")) card.signals.push("approved");
+    } catch {
+      // MR may be from a project we can't read approvals for
+    }
+  });
 
   const prs = [...cardMap.values()].map(({ projectId: _projectId, ...card }) => card);
   prsCache = { key: cacheKey, prs, ts: Date.now() };

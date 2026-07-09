@@ -63,55 +63,54 @@ describe("gitlab fetchPRs", () => {
     state: "opened",
     draft: true,
     author: { username: "bob" },
+    reviewers: [{ username: "alice" }],
     project_id: 10,
-    references: { full: "grp/proj!1" },
   };
   const ownMr = {
     iid: 2,
     title: "My change",
-    web_url: "https://gitlab.com/grp/proj2/-/merge_requests/2",
+    web_url: "https://gitlab.com/grp/proj/-/merge_requests/2",
     updated_at: "2026-07-02T00:00:00Z",
     state: "opened",
     author: { username: "alice" },
-    project_id: 11,
-    references: { full: "grp/proj2!2" },
+    project_id: 10,
   };
   const mergedMr = {
     iid: 3,
     title: "Shipped",
-    web_url: "https://gitlab.com/grp/proj3/-/merge_requests/3",
+    web_url: "https://gitlab.com/grp/proj/-/merge_requests/3",
     updated_at: "2026-07-03T00:00:00Z",
     state: "merged",
     author: { username: "alice" },
-    project_id: 12,
-    references: { full: "grp/proj3!3" },
+    project_id: 10,
   };
 
   function routes() {
     return [
-      { match: "reviewer_username=alice", body: [reviewerMr] },
-      { match: "author_username=alice&state=opened", body: [ownMr] },
-      { match: "author_username=alice&state=merged", body: [mergedMr] },
-      {
-        match: "/projects/10/merge_requests/1/approvals",
-        body: { approved_by: [{ user: { username: "carol" } }] },
-      },
+      { match: "/projects/grp%2Fproj/merge_requests?state=opened", body: [reviewerMr, ownMr] },
+      { match: "/projects/grp%2Fproj/merge_requests?state=merged", body: [mergedMr] },
+      { match: "/projects/10/merge_requests/2/approvals", body: { approved_by: [] } },
     ];
   }
 
-  it("maps MRs to cards with the right ids, iid as prNumber, and signals", async () => {
+  it("returns no cards when the watchlist is empty", async () => {
     mockFetch(routes());
     const prs = await gitlabProvider.fetchPRs(ctx(), [], true, 14);
+    expect(prs).toEqual([]);
+    expect(calls.length).toBe(0);
+  });
 
-    const a = prs.find((p) => p.prNumber === 1)!;
-    expect(a.id).toBe("mr_grp_proj_1");
-    expect(a.platform).toBe("gitlab");
-    expect(a.repo).toBe("grp/proj");
-    expect(a.author).toBe("bob");
-    expect(a.isOwnPR).toBe(false);
-    expect(a.signals).toEqual(["pr-open", "review-requested", "draft"]);
+  it("maps all non-draft MRs in watchlisted projects to cards, excluding drafts", async () => {
+    mockFetch(routes());
+    const prs = await gitlabProvider.fetchPRs(ctx(), ["grp/proj"], true, 14);
+
+    // draft MR (iid 1) is excluded entirely, even though alice is a requested reviewer
+    expect(prs.find((p) => p.prNumber === 1)).toBeUndefined();
 
     const b = prs.find((p) => p.prNumber === 2)!;
+    expect(b.id).toBe("mr_grp_proj_2");
+    expect(b.platform).toBe("gitlab");
+    expect(b.repo).toBe("grp/proj");
     expect(b.signals).toEqual(["pr-open", "own-pr"]);
     expect(b.isOwnPR).toBe(true);
 
@@ -119,30 +118,43 @@ describe("gitlab fetchPRs", () => {
     expect(c.signals).toEqual(["merged", "own-pr"]);
   });
 
-  it("adds approved (approvals-only, never changes-requested) for watchlisted MRs", async () => {
-    mockFetch(routes());
+  it("adds approved (approvals-only, never changes-requested) for open MRs", async () => {
+    // Distinct project/iid from the other cases, since the approvals cache is keyed by them.
+    const approvedMr = { ...ownMr, iid: 20, project_id: 20 };
+    mockFetch([
+      { match: "/projects/grp%2Fproj/merge_requests?state=opened", body: [approvedMr] },
+      { match: "/projects/grp%2Fproj/merge_requests?state=merged", body: [] },
+      {
+        match: "/projects/20/merge_requests/20/approvals",
+        body: { approved_by: [{ user: { username: "carol" } }] },
+      },
+    ]);
     const prs = await gitlabProvider.fetchPRs(ctx(), ["grp/proj"], true, 14);
-    const a = prs.find((p) => p.prNumber === 1)!;
-    expect(a.signals).toContain("approved");
+    const b = prs.find((p) => p.prNumber === 20)!;
+    expect(b.signals).toContain("approved");
     expect(prs.every((p) => !p.signals.includes("changes-requested"))).toBe(true);
   });
 
-  it("does not fetch approvals for MRs outside the watchlist", async () => {
-    mockFetch(routes());
+  it("does not fetch MRs for projects outside the watchlist", async () => {
+    mockFetch([
+      ...routes(),
+      { match: "/projects/grp%2Fother/merge_requests?state=opened", body: [] },
+      { match: "/projects/grp%2Fother/merge_requests?state=merged", body: [] },
+    ]);
     await gitlabProvider.fetchPRs(ctx(), ["grp/other"], true, 14);
-    expect(calls.some((c) => c.url.includes("/approvals"))).toBe(false);
+    expect(calls.some((c) => c.url.includes("grp%2Fproj"))).toBe(false);
   });
 
   it("handles nested group paths", async () => {
     mockFetch([
       {
-        match: "reviewer_username=alice",
-        body: [{ ...reviewerMr, iid: 7, references: { full: "group/sub/proj!7" } }],
+        match: "/projects/group%2Fsub%2Fproj/merge_requests?state=opened",
+        body: [{ ...ownMr, iid: 7 }],
       },
-      { match: "author_username=alice&state=opened", body: [] },
-      { match: "author_username=alice&state=merged", body: [] },
+      { match: "/projects/group%2Fsub%2Fproj/merge_requests?state=merged", body: [] },
+      { match: "/projects/10/merge_requests/7/approvals", body: { approved_by: [] } },
     ]);
-    const prs = await gitlabProvider.fetchPRs(ctx(), [], true, 14);
+    const prs = await gitlabProvider.fetchPRs(ctx(), ["group/sub/proj"], true, 14);
     expect(prs[0]?.repo).toBe("group/sub/proj");
     expect(prs[0]?.id).toBe("mr_group_sub_proj_7");
   });

@@ -4,19 +4,27 @@ import { mapWithConcurrency } from "./concurrency";
 
 const GITHUB_API = "https://api.github.com";
 
-interface GHPR {
+interface GHPullListItem {
   number: number;
   title: string;
   html_url: string;
   updated_at: string;
   user: { login: string } | null;
-  repository_url: string;
   draft: boolean;
+  requested_reviewers?: { login: string }[] | null;
+}
+
+interface GHSearchItem {
+  number: number;
+  title: string;
+  html_url: string;
+  updated_at: string;
+  user: { login: string } | null;
 }
 
 interface GHSearchResponse {
   total_count: number;
-  items: GHPR[];
+  items: GHSearchItem[];
 }
 
 interface GHRepoSearchResponse {
@@ -51,15 +59,18 @@ async function ghFetch<T>(token: string, path: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-function prKey(pr: GHPR): string {
-  const repo = pr.repository_url.split("/repos/")[1] || "unknown";
-  return `pr_${repo.replaceAll("/", "_")}_${pr.number}`;
+function prKey(repo: string, number: number): string {
+  return `pr_${repo.replaceAll("/", "_")}_${number}`;
 }
 
-function toPRCard(pr: GHPR, isOwnPR: boolean, signals: Signal[] = []): PRCard {
-  const repo = pr.repository_url.split("/repos/")[1] || "unknown";
+function toPRCard(
+  repo: string,
+  pr: { number: number; title: string; html_url: string; updated_at: string; user: { login: string } | null },
+  isOwnPR: boolean,
+  signals: Signal[] = [],
+): PRCard {
   return {
-    id: prKey(pr),
+    id: prKey(repo, pr.number),
     platform: "github",
     prNumber: pr.number,
     repo,
@@ -113,6 +124,19 @@ async function fetchReviews(token: string, repo: string, prNumber: number): Prom
   return reviews;
 }
 
+async function fetchOpenPRs(token: string, repo: string): Promise<GHPullListItem[]> {
+  return ghFetch<GHPullListItem[]>(token, `/repos/${repo}/pulls?state=open&per_page=100`);
+}
+
+async function fetchMergedPRs(token: string, repo: string, cutoff: string): Promise<GHSearchItem[]> {
+  const query = `is:pr is:merged repo:${repo} merged:>=${cutoff}`;
+  const res = await ghFetch<GHSearchResponse>(
+    token,
+    `/search/issues?q=${encodeURIComponent(query)}&per_page=50`,
+  );
+  return res.items;
+}
+
 async function fetchPRs(
   ctx: ProviderContext,
   enabledRepos: string[] = [],
@@ -129,67 +153,52 @@ async function fetchPRs(
       for (const pr of prs) {
         pr.signals = pr.signals.filter((s) => s !== "approved" && s !== "changes-requested");
       }
-      await enrichWithReviewSignals(token, cardMap, user, enabledRepos);
+      await enrichWithReviewSignals(token, cardMap, user);
     }
     return prs;
   }
 
+  if (enabledRepos.length === 0) {
+    prsCache = { key: cacheKey, prs: [], ts: Date.now() };
+    return [];
+  }
+
   const cardMap = new Map<string, PRCard & { signals: Signal[] }>();
-
-  // Independent search queries: run concurrently instead of one round trip at a time.
-  const reviewQuery = `is:pr is:open review-requested:${user}`;
-  const ownQuery = `is:pr is:open author:${user}`;
   const cutoff = new Date(Date.now() - mergedRetentionDays * 86400000).toISOString().split("T")[0];
-  const mergedQuery = `is:pr is:merged author:${user} merged:>=${cutoff}`;
 
-  const [reviewResult, ownResult, mergedResult] = await Promise.all([
-    ghFetch<GHSearchResponse>(
-      token,
-      `/search/issues?q=${encodeURIComponent(reviewQuery)}&per_page=50`,
-    ),
-    ghFetch<GHSearchResponse>(
-      token,
-      `/search/issues?q=${encodeURIComponent(ownQuery)}&per_page=50`,
-    ),
-    ghFetch<GHSearchResponse>(
-      token,
-      `/search/issues?q=${encodeURIComponent(mergedQuery)}&per_page=20`,
-    ),
-  ]);
+  // One repo's fetch doesn't wait on another's: run the whole watchlist concurrently.
+  await mapWithConcurrency(enabledRepos, 8, async (repo) => {
+    const [openPRs, mergedPRs] = await Promise.all([
+      fetchOpenPRs(token, repo),
+      fetchMergedPRs(token, repo, cutoff),
+    ]);
 
-  // 1. PRs where user is requested as reviewer
-  for (const pr of reviewResult.items) {
-    const id = prKey(pr);
-    const signals: Signal[] = ["pr-open", "review-requested"];
-    if (pr.draft) signals.push("draft");
-    cardMap.set(id, { ...toPRCard(pr, false), signals });
-  }
-
-  // 2. PRs created by user (own PRs)
-  for (const pr of ownResult.items) {
-    const id = prKey(pr);
-    if (!cardMap.has(id)) {
-      const signals: Signal[] = ["pr-open", "own-pr"];
-      if (pr.draft) signals.push("draft");
-      cardMap.set(id, { ...toPRCard(pr, true), signals });
+    // 1. All open PRs in the repo (unless draft), not just ones involving the user
+    for (const pr of openPRs) {
+      if (pr.draft) continue;
+      const isOwnPR = pr.user?.login === user;
+      const signals: Signal[] = ["pr-open"];
+      if (isOwnPR) signals.push("own-pr");
+      if (pr.requested_reviewers?.some((r) => r.login === user)) signals.push("review-requested");
+      cardMap.set(prKey(repo, pr.number), { ...toPRCard(repo, pr, isOwnPR), signals });
     }
-  }
 
-  // 3. Recently merged PRs (own, within configured retention)
-  for (const pr of mergedResult.items) {
-    const id = prKey(pr);
-    if (!cardMap.has(id)) {
-      cardMap.set(id, { ...toPRCard(pr, true), signals: ["merged", "own-pr"] });
-    } else {
-      const existing = cardMap.get(id)!;
-      if (!existing.signals.includes("merged")) existing.signals.push("merged");
+    // 2. Recently merged PRs (any author, within configured retention)
+    for (const pr of mergedPRs) {
+      const id = prKey(repo, pr.number);
+      const existing = cardMap.get(id);
+      if (existing) {
+        if (!existing.signals.includes("merged")) existing.signals.push("merged");
+      } else {
+        const isOwnPR = pr.user?.login === user;
+        const signals: Signal[] = ["merged"];
+        if (isOwnPR) signals.push("own-pr");
+        cardMap.set(id, { ...toPRCard(repo, pr, isOwnPR), signals });
+      }
     }
-  }
+  });
 
-  // 4. Fetch review status only for PRs in the watchlist
-  if (enabledRepos.length > 0) {
-    await enrichWithReviewSignals(token, cardMap, user, enabledRepos);
-  }
+  await enrichWithReviewSignals(token, cardMap, user);
 
   const prs = [...cardMap.values()];
   prsCache = { key: cacheKey, prs, ts: Date.now() };
@@ -200,11 +209,8 @@ async function enrichWithReviewSignals(
   token: string,
   cardMap: Map<string, PRCard & { signals: Signal[] }>,
   user: string,
-  enabledRepos: string[],
 ) {
-  const watchlisted = [...cardMap.values()].filter(
-    (c) => !c.signals.includes("merged") && enabledRepos.includes(c.repo),
-  );
+  const watchlisted = [...cardMap.values()].filter((c) => !c.signals.includes("merged"));
   await mapWithConcurrency(watchlisted, 8, async (card) => {
     try {
       const reviews = await fetchReviews(token, card.repo, card.prNumber);
