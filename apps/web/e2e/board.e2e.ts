@@ -8,19 +8,23 @@ interface GHItem {
   html_url: string;
   updated_at: string;
   user: { login: string };
-  repository_url: string;
   draft: boolean;
+  requested_reviewers?: { login: string }[];
 }
 
-function ghSearchItem(n: number, title: string, opts: { draft?: boolean; author?: string } = {}): GHItem {
+function ghItem(
+  n: number,
+  title: string,
+  opts: { draft?: boolean; author?: string; reviewer?: string } = {},
+): GHItem {
   return {
     number: n,
     title,
     html_url: `https://github.com/${REPO}/pull/${n}`,
     updated_at: new Date().toISOString(),
     user: { login: opts.author ?? "someone" },
-    repository_url: `https://api.github.com/repos/${REPO}`,
     draft: opts.draft ?? false,
+    requested_reviewers: opts.reviewer ? [{ login: opts.reviewer }] : [],
   };
 }
 
@@ -32,19 +36,17 @@ async function seedAuth(page: Page, opts: { enabledRepos?: string[] } = {}) {
   }, opts.enabledRepos ?? []);
 }
 
-async function mockGitHub(
-  page: Page,
-  opts: { reviewRequested?: GHItem[]; own?: GHItem[]; merged?: GHItem[] } = {},
-) {
+async function mockGitHub(page: Page, opts: { open?: GHItem[]; merged?: GHItem[] } = {}) {
   await page.route("https://api.github.com/**", async (route) => {
     const url = new URL(route.request().url());
 
+    if (url.pathname === `/repos/${REPO}/pulls`) {
+      await route.fulfill({ json: opts.open ?? [] });
+      return;
+    }
     if (url.pathname === "/search/issues") {
       const q = url.searchParams.get("q") ?? "";
-      let items: GHItem[] = [];
-      if (q.includes("review-requested:")) items = opts.reviewRequested ?? [];
-      else if (q.includes("is:merged")) items = opts.merged ?? [];
-      else if (q.includes("author:")) items = opts.own ?? [];
+      const items = q.includes("is:merged") ? opts.merged ?? [] : [];
       await route.fulfill({ json: { total_count: items.length, items } });
       return;
     }
@@ -133,7 +135,7 @@ test.describe("Review365", () => {
 
   test("note: adds and edits a note on a card", async ({ page }) => {
     await seedAuth(page, { enabledRepos: [REPO] });
-    await mockGitHub(page, { reviewRequested: [ghSearchItem(1, "Test PR")] });
+    await mockGitHub(page, { open: [ghItem(1, "Test PR")] });
 
     await page.goto("/", { waitUntil: "networkidle" });
     await page.locator("h1").waitFor({ state: "visible" });
@@ -180,7 +182,7 @@ test.describe("Review365", () => {
 
   test("note: input is not draggable", async ({ page }) => {
     await seedAuth(page, { enabledRepos: [REPO] });
-    await mockGitHub(page, { reviewRequested: [ghSearchItem(1, "Test PR")] });
+    await mockGitHub(page, { open: [ghItem(1, "Test PR")] });
 
     await page.goto("/", { waitUntil: "networkidle" });
     await page.locator("h1").waitFor({ state: "visible" });
