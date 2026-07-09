@@ -3,6 +3,7 @@ import {
   callbackRedirectUri,
   getAppOrigin,
   getOAuthConfig,
+  isGitHubAppClientId,
   oauthErrorRedirect,
   randomState,
   stateCookieHeader,
@@ -17,6 +18,10 @@ export default async function handler(request: Request): Promise<Response> {
 
   if (!configured) {
     return Response.redirect(oauthErrorRedirect(origin, "oauth_not_configured"), 302);
+  }
+
+  if (isGitHubAppClientId(clientId)) {
+    return Response.redirect(oauthErrorRedirect(origin, "github_app_not_supported"), 302);
   }
 
   const state = randomState();

@@ -3,6 +3,27 @@
 Review365 is mostly a static SPA. GitHub OAuth still needs a tiny server to hold
 `GITHUB_CLIENT_SECRET` and exchange the authorization code for an access token.
 
+## Register the right app type
+
+Review365 uses the **classic OAuth App** flow with `scope=repo read:org`. Create it under
+[Developer settings → OAuth Apps](https://github.com/settings/developers) (**not** "GitHub Apps").
+
+| | OAuth App (required) | GitHub App (wrong for this project) |
+| --- | --- | --- |
+| Client ID prefix | `Ov…` | `Iv…` |
+| Scopes | Requested in authorize URL (`repo`, `read:org`) | Ignored — uses app permissions + installation |
+| Org private repos | Shown on authorize page; org owners can Grant | Requires installing the app on each account/org |
+
+Production `GITHUB_CLIENT_ID` must start with `Ov`. If it starts with `Iv`, users will only see
+identity permissions on the authorize screen and private repos will not work.
+
+### Create an OAuth App
+
+1. [New OAuth App](https://github.com/settings/applications/new)
+2. Homepage URL: your app origin (e.g. `https://review365.example`)
+3. Authorization callback URL: `{APP_ORIGIN}/api/auth/github/callback`
+4. Copy Client ID (`Ov…`) and generate a client secret into env vars
+
 ## Flow
 
 1. User clicks **Connect with GitHub** → `GET /api/auth/github/start`
