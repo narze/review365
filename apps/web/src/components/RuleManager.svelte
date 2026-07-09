@@ -31,23 +31,23 @@
 </script>
 
 <div>
-	<h3 class="mb-3 text-sm font-semibold text-neutral-300">Automation Rules</h3>
-	<p class="mb-3 text-xs text-neutral-500">
+	<h3 class="mb-3 text-sm font-semibold text-body">Automation Rules</h3>
+	<p class="mb-3 text-xs text-faint">
 		When a PR's signal is detected, its card auto-moves to the mapped column.
 	</p>
 	<div class="flex flex-col gap-2">
 		{#if rules.length === 0}
-			<div class="text-xs italic text-neutral-600">No rules yet. Add one below.</div>
+			<div class="text-xs italic text-dim">No rules yet. Add one below.</div>
 		{:else}
 			{#each rules as rule (rule.id)}
-				<div class="flex items-center gap-2 rounded-md bg-neutral-800 px-3 py-2 text-sm">
-					<span class="flex-1 text-neutral-100">
-						<span class="text-blue-400">{signalLabels[rule.signal] ?? rule.signal}</span>
-						<span class="text-neutral-500"> → </span>
-						<span class="text-neutral-200">{columnTitle(rule.columnId)}</span>
+				<div class="flex items-center gap-2 rounded-md surface-raised px-3 py-2 text-sm">
+					<span class="flex-1 text-heading">
+						<span class="text-blue-500 dark:text-blue-400">{signalLabels[rule.signal] ?? rule.signal}</span>
+						<span class="text-faint"> → </span>
+						<span class="text-body">{columnTitle(rule.columnId)}</span>
 					</span>
 					<button
-						class="rounded px-2 py-0.5 text-xs text-red-400 hover:bg-neutral-700 hover:text-red-300"
+						class="rounded px-2 py-0.5 text-xs text-red-500 hover:bg-neutral-200 hover:text-red-600 dark:text-red-400 dark:hover:bg-neutral-700 dark:hover:text-red-300"
 						onclick={() => onDelete(rule.id)}>Delete</button
 					>
 				</div>
@@ -56,7 +56,7 @@
 	</div>
 	<div class="mt-3 flex gap-2">
 		<select
-			class="flex-1 rounded-md border border-neutral-700 bg-neutral-950 px-2 py-1.5 text-sm text-neutral-100 focus:border-blue-500 focus:outline-none"
+			class="input-field flex-1 px-2 py-1.5"
 			value={selectedSignal}
 			onchange={(e) => (selectedSignal = (e.target as HTMLSelectElement).value)}
 		>
@@ -66,7 +66,7 @@
 			{/each}
 		</select>
 		<select
-			class="flex-1 rounded-md border border-neutral-700 bg-neutral-950 px-2 py-1.5 text-sm text-neutral-100 focus:border-blue-500 focus:outline-none"
+			class="input-field flex-1 px-2 py-1.5"
 			value={selectedColumnId}
 			onchange={(e) => (selectedColumnId = (e.target as HTMLSelectElement).value)}
 		>

@@ -1,12 +1,66 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 body {
-  @apply bg-neutral-950 text-neutral-100;
+  @apply bg-neutral-50 text-neutral-900 dark:bg-neutral-950 dark:text-neutral-100;
+}
+
+@utility surface-panel {
+  @apply bg-white dark:bg-neutral-900;
+}
+
+@utility surface-raised {
+  @apply bg-neutral-100 dark:bg-neutral-800;
+}
+
+@utility surface-sunken {
+  @apply bg-neutral-50 dark:bg-neutral-950;
+}
+
+@utility border-panel {
+  @apply border-neutral-200 dark:border-neutral-800;
+}
+
+@utility border-control {
+  @apply border-neutral-300 dark:border-neutral-700;
+}
+
+@utility text-heading {
+  @apply text-neutral-900 dark:text-neutral-100;
+}
+
+@utility text-body {
+  @apply text-neutral-600 dark:text-neutral-300;
+}
+
+@utility text-muted {
+  @apply text-neutral-500 dark:text-neutral-400;
+}
+
+@utility text-faint {
+  @apply text-neutral-400 dark:text-neutral-500;
+}
+
+@utility text-dim {
+  @apply text-neutral-400 dark:text-neutral-600;
+}
+
+@utility input-field {
+  @apply rounded-md border border-control surface-sunken text-sm text-heading focus:border-blue-500 focus:outline-none;
+}
+
+@utility btn-secondary {
+  @apply rounded-md border border-control surface-raised text-body transition-colors hover:border-blue-500;
+}
+
+@utility hover-surface {
+  @apply hover:bg-neutral-100 dark:hover:bg-neutral-800;
 }
 
 @utility thin-scrollbar {
   scrollbar-width: thin;
-  scrollbar-color: var(--color-neutral-700) transparent;
+  scrollbar-color: rgb(212 212 212) transparent;
 
   &::-webkit-scrollbar {
     width: 8px;
@@ -18,17 +72,29 @@ body {
   }
 
   &::-webkit-scrollbar-thumb {
-    background-color: var(--color-neutral-700);
+    background-color: rgb(212 212 212);
     border-radius: 9999px;
     border: 2px solid transparent;
     background-clip: content-box;
   }
 
   &::-webkit-scrollbar-thumb:hover {
-    background-color: var(--color-neutral-600);
+    background-color: rgb(163 163 163);
   }
 
   &::-webkit-scrollbar-corner {
     background: transparent;
   }
+}
+
+.dark .thin-scrollbar {
+  scrollbar-color: var(--color-neutral-700) transparent;
+}
+
+.dark .thin-scrollbar::-webkit-scrollbar-thumb {
+  background-color: var(--color-neutral-700);
+}
+
+.dark .thin-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: var(--color-neutral-600);
 }

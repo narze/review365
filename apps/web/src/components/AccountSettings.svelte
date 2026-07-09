@@ -53,27 +53,27 @@
 	}
 </script>
 
-<div class="rounded-lg border border-neutral-800 p-4">
+<div class="rounded-lg border border-panel p-4">
 	<div class="mb-3 flex items-center justify-between">
-		<div class="text-sm text-neutral-300">
-			Signed in as <strong class="text-neutral-100">@{login}</strong>
-			<span class="text-neutral-500">on {platformLabel[platform]}</span>
+		<div class="text-sm text-body">
+			Signed in as <strong class="text-heading">@{login}</strong>
+			<span class="text-faint">on {platformLabel[platform]}</span>
 		</div>
 		<button
-			class="rounded-md border border-neutral-700 bg-neutral-800 px-2.5 py-1 text-xs text-neutral-300 transition-colors hover:border-red-500"
+			class="btn-secondary px-2.5 py-1 text-xs hover:border-red-500"
 			onclick={handleSignOut}
 		>
 			Sign out
 		</button>
 	</div>
 	<div class="mb-3 flex items-center gap-2">
-		<span class="text-xs text-neutral-500">Platform</span>
-		<div class="inline-flex rounded-md border border-neutral-700 p-0.5">
+		<span class="text-xs text-faint">Platform</span>
+		<div class="inline-flex rounded-md border border-control p-0.5">
 			{#each ['github', 'gitlab'] as const as p}
 				<button
 					class="rounded px-2.5 py-1 text-xs font-medium transition-colors {platform === p
 						? 'bg-blue-600 text-white'
-						: 'text-neutral-300 hover:text-neutral-100'}"
+						: 'text-body hover:text-heading'}"
 					onclick={() => platform !== p && onSwitchPlatform(p)}
 				>
 					{platformLabel[p]}
@@ -83,13 +83,13 @@
 	</div>
 	<div class="flex items-center gap-2">
 		<button
-			class="rounded-md border border-neutral-700 bg-neutral-800 px-2.5 py-1 text-xs text-neutral-300 transition-colors hover:border-blue-500"
+			class="btn-secondary px-2.5 py-1 text-xs"
 			onclick={handleExport}
 		>
 			⬇️ Export board
 		</button>
 		<button
-			class="rounded-md border border-neutral-700 bg-neutral-800 px-2.5 py-1 text-xs text-neutral-300 transition-colors hover:border-blue-500"
+			class="btn-secondary px-2.5 py-1 text-xs"
 			onclick={() => fileInput?.click()}
 		>
 			⬆️ Import board
@@ -102,10 +102,10 @@
 			onchange={handleImportFile}
 		/>
 		{#if importStatus}
-			<span class="text-xs text-neutral-400">{importStatus}</span>
+			<span class="text-xs text-muted">{importStatus}</span>
 		{/if}
 	</div>
-	<p class="mt-2 text-xs text-neutral-500">
+	<p class="mt-2 text-xs text-faint">
 		Board state lives in this browser only. Export before clearing site data or switching
 		machines. Exports never include your token.
 	</p>

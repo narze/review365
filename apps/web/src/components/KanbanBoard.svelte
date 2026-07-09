@@ -6,6 +6,7 @@
 	import RuleManager from './RuleManager.svelte';
 	import AccountSettings from './AccountSettings.svelte';
 	import { SvelteMap } from 'svelte/reactivity';
+	import { getTheme, setTheme, type Theme } from '$lib/theme';
 
 	let {
 		cards = [],
@@ -72,6 +73,7 @@
 	} = $props();
 
 	let showSettings = $state(false);
+	let theme = $state<Theme>(getTheme());
 	let showArchived = $state(false);
 	let refreshing = $state(false);
 	let dragColId: string | null = $state(null);
@@ -129,6 +131,11 @@
 		dragColId = null;
 	}
 
+	function onThemeChange(next: Theme) {
+		theme = next;
+		setTheme(next);
+	}
+
 	async function handleRefresh() {
 		refreshing = true;
 		try {
@@ -180,19 +187,17 @@
 	}
 </script>
 
-<div class="flex items-center gap-3 border-b border-neutral-800 px-6 py-3">
-	<h1 class="text-xl font-bold text-neutral-100">Review365</h1>
+<div class="flex items-center gap-3 border-b border-panel px-6 py-3">
+	<h1 class="text-xl font-bold text-heading">Review365</h1>
 	<RepoFilter {enabledRepos} {repoCounts} onToggle={onToggleRepo} />
-	<span class="text-sm text-neutral-400">
+	<span class="text-sm text-muted">
 		{enabledRepos.length === 0
 			? 'Select repos to view →'
 			: `${filteredCards.length} of ${cards.length} PRs across ${columns.length} columns`}
 	</span>
 	{#if archivedCount > 0}
 		<button
-			class="rounded-md border border-neutral-700 bg-neutral-800 px-2.5 py-1 text-xs text-neutral-300 transition-colors hover:border-blue-500 {showArchived
-				? 'border-blue-500'
-				: ''}"
+			class="btn-secondary px-2.5 py-1 text-xs {showArchived ? 'border-blue-500' : ''}"
 			onclick={() => (showArchived = !showArchived)}
 		>
 			📦 {archivedCount} archived {showArchived ? '(showing)' : '(hidden)'}
@@ -200,16 +205,14 @@
 	{/if}
 	<div class="ml-auto flex gap-2">
 		<button
-			class="rounded-md border border-neutral-700 bg-neutral-800 px-3 py-1.5 text-sm text-neutral-100 transition-colors hover:border-blue-500 disabled:opacity-40"
+			class="btn-secondary px-3 py-1.5 text-sm text-heading disabled:opacity-40"
 			disabled={refreshing}
 			onclick={handleRefresh}
 		>
 			{refreshing ? '⏳ Fetching...' : '🔄 Refresh'}
 		</button>
 		<button
-			class="rounded-md border border-neutral-700 bg-neutral-800 px-3 py-1.5 text-sm text-neutral-100 transition-colors hover:border-blue-500 {showSettings
-				? 'border-blue-500'
-				: ''}"
+			class="btn-secondary px-3 py-1.5 text-sm text-heading {showSettings ? 'border-blue-500' : ''}"
 			onclick={() => (showSettings = !showSettings)}
 		>
 			⚙️ Settings
@@ -224,34 +227,49 @@
 {/if}
 
 {#if showSettings}
-	<div class="border-b border-neutral-800 bg-neutral-900 p-4">
+	<div class="border-b border-panel surface-panel p-4">
 		<div class="mx-auto max-w-3xl grid gap-6">
 			<AccountSettings {platform} {login} {onSignOut} {onImported} {onSwitchPlatform} />
 			<ColumnManager {columns} onAdd={onAddColumn} onRename={onRenameColumn} onDelete={onDeleteColumn} />
 			<RuleManager {columns} {rules} {signalLabels} onAdd={onAddRule} onDelete={onDeleteRule} />
-			<div class="flex items-center gap-3 rounded-lg border border-neutral-800 p-4">
-				<span class="text-sm text-neutral-300">Merged PR retention</span>
+			<div class="flex items-center gap-3 rounded-lg border border-panel p-4">
+				<span class="text-sm text-body">Theme</span>
+				<div class="inline-flex rounded-md border border-control p-0.5">
+					{#each ['light', 'dark'] as const as t}
+						<button
+							class="rounded px-2.5 py-1 text-xs font-medium transition-colors {theme === t
+								? 'bg-blue-600 text-white'
+								: 'text-body hover:text-heading'}"
+							onclick={() => onThemeChange(t)}
+						>
+							{t === 'light' ? '☀️ Light' : '🌙 Dark'}
+						</button>
+					{/each}
+				</div>
+			</div>
+			<div class="flex items-center gap-3 rounded-lg border border-panel p-4">
+				<span class="text-sm text-body">Merged PR retention</span>
 				<input
 					type="number"
 					min="1"
 					max="90"
 					value={mergedRetentionDays}
 					onchange={(e) => onSetRetention(Number((e.target as HTMLInputElement).value))}
-					class="w-20 rounded-md border border-neutral-700 bg-neutral-800 px-2 py-1 text-sm text-neutral-100"
+					class="input-field w-20 px-2 py-1"
 				/>
-				<span class="text-xs text-neutral-500">days</span>
+				<span class="text-xs text-faint">days</span>
 			</div>
-			<div class="flex items-center gap-3 rounded-lg border border-neutral-800 p-4">
-				<span class="text-sm text-neutral-300">Column width</span>
+			<div class="flex items-center gap-3 rounded-lg border border-panel p-4">
+				<span class="text-sm text-body">Column width</span>
 				<input
 					type="number"
 					min="200"
 					max="800"
 					value={columnWidthPx}
 					onchange={(e) => onSetColumnWidth(Number((e.target as HTMLInputElement).value))}
-					class="w-20 rounded-md border border-neutral-700 bg-neutral-800 px-2 py-1 text-sm text-neutral-100"
+					class="input-field w-20 px-2 py-1"
 				/>
-				<span class="text-xs text-neutral-500">px</span>
+				<span class="text-xs text-faint">px</span>
 			</div>
 		</div>
 	</div>
@@ -259,14 +277,14 @@
 
 {#if enabledRepos.length === 0}
 	{#if loading}
-		<div class="flex flex-col items-center justify-center py-20 text-neutral-600">
+		<div class="flex flex-col items-center justify-center py-20 text-dim">
 			<div class="mb-3 animate-pulse text-5xl opacity-50">⏳</div>
-			<div class="text-lg text-neutral-400">Loading your board…</div>
+			<div class="text-lg text-muted">Loading your board…</div>
 		</div>
 	{:else}
-		<div class="flex flex-col items-center justify-center py-20 text-neutral-600">
+		<div class="flex flex-col items-center justify-center py-20 text-dim">
 			<div class="mb-3 text-5xl opacity-50">📁</div>
-			<div class="mb-2 text-lg text-neutral-400">No repos selected</div>
+			<div class="mb-2 text-lg text-muted">No repos selected</div>
 			<div class="text-sm">
 				Click <strong class="text-blue-400">Repos</strong> above and search to add repos to your
 				watchlist.

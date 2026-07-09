@@ -107,9 +107,9 @@
 </script>
 
 <div
-	class="flex max-h-[calc(100vh-100px)] shrink-0 flex-col rounded-xl border bg-neutral-900 transition-colors {isOver
-		? 'border-blue-500 bg-blue-950/30'
-		: 'border-neutral-800'}"
+	class="flex max-h-[calc(100vh-100px)] shrink-0 flex-col rounded-xl border surface-panel transition-colors {isOver
+		? 'border-blue-500 bg-blue-50 dark:bg-blue-950/30'
+		: 'border-panel'}"
 	style="width: {width}px"
 	role="region"
 	aria-label={col.title}
@@ -117,10 +117,10 @@
 	ondragleave={handleColumnDragLeave}
 	ondrop={handleColumnDrop}
 >
-	<div class="flex items-center justify-between border-b border-neutral-800 px-4 py-3">
-		<span class="text-sm font-semibold text-neutral-100">{col.title}</span>
+	<div class="flex items-center justify-between border-b border-panel px-4 py-3">
+		<span class="text-sm font-semibold text-heading">{col.title}</span>
 		<span class="flex items-center gap-2">
-			<span class="rounded-full bg-neutral-800 px-2 py-0.5 text-xs text-neutral-400"
+			<span class="rounded-full surface-raised px-2 py-0.5 text-xs text-muted"
 				>{visibleCards.length}</span
 			>
 			<div class="relative">
@@ -128,8 +128,8 @@
 					bind:this={sortBtnEl}
 					onclick={() => (sortOpen = !sortOpen)}
 					class="cursor-pointer rounded px-1 text-xs transition-colors {sortMode !== 'default'
-						? 'text-blue-400 hover:text-blue-300'
-						: 'text-neutral-600 hover:text-neutral-400'}"
+						? 'text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300'
+						: 'text-dim hover:text-muted'}"
 					title={activeSortLabel}
 				>
 					{sortMode === 'default'
@@ -148,7 +148,7 @@
 						onclick={closeSortDropdown}
 					></button>
 					<div
-						class="absolute right-0 top-full z-20 mt-1 w-36 rounded-lg border border-neutral-700 bg-neutral-800 py-1 shadow-xl"
+						class="absolute right-0 top-full z-20 mt-1 w-36 rounded-lg border border-control surface-raised py-1 shadow-xl"
 						onkeydown={handleSortKeydown}
 					>
 						{#each SORT_OPTIONS as opt}
@@ -157,9 +157,9 @@
 									onSort(opt.value);
 									closeSortDropdown();
 								}}
-								class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs transition-colors hover:bg-neutral-700 {opt.value === sortMode
-									? 'text-blue-400'
-									: 'text-neutral-300'}"
+								class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs transition-colors hover:bg-neutral-200 dark:hover:bg-neutral-700 {opt.value === sortMode
+									? 'text-blue-500 dark:text-blue-400'
+									: 'text-body'}"
 							>
 								<span class="w-4 text-center">{opt.value === sortMode ? '✓' : ''}</span>
 								<span>{opt.label}</span>
@@ -177,7 +177,7 @@
 						onColumnDragStart();
 					}}
 					ondragend={onColumnDragEnd}
-					class="cursor-grab text-xs text-neutral-600 hover:text-neutral-400 active:cursor-grabbing"
+					class="cursor-grab text-xs text-dim hover:text-muted active:cursor-grabbing"
 					title="Drag to reorder"
 				>
 					⠿
@@ -205,7 +205,7 @@
 			</div>
 		{/each}
 		{#if visibleCards.length === 0}
-			<div class="py-6 text-center text-sm text-neutral-600">No PRs</div>
+			<div class="py-6 text-center text-sm text-dim">No PRs</div>
 		{/if}
 	</div>
 </div>

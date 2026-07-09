@@ -37,13 +37,13 @@
 </script>
 
 <div>
-	<h3 class="mb-3 text-sm font-semibold text-neutral-300">Columns</h3>
+	<h3 class="mb-3 text-sm font-semibold text-body">Columns</h3>
 	<div class="flex flex-col gap-2">
 		{#each columns as col (col.id)}
 			<div class="flex items-center gap-2">
 				{#if editingId === col.id}
 					<input
-						class="flex-1 rounded-md border border-neutral-700 bg-neutral-950 px-2 py-1 text-sm text-neutral-100 focus:border-blue-500 focus:outline-none"
+						class="input-field flex-1 px-2 py-1"
 						value={editTitle}
 						oninput={(e) => (editTitle = (e.target as HTMLInputElement).value)}
 						onkeydown={(e) => e.key === 'Enter' && saveEdit()}
@@ -53,17 +53,17 @@
 						onclick={saveEdit}>Save</button
 					>
 					<button
-						class="rounded bg-neutral-700 px-2 py-1 text-xs text-neutral-300 hover:bg-neutral-600"
+						class="rounded surface-raised px-2 py-1 text-xs text-body hover:bg-neutral-200 dark:hover:bg-neutral-600"
 						onclick={() => (editingId = null)}>Cancel</button
 					>
 				{:else}
-					<span class="flex-1 text-sm text-neutral-100">{col.title}</span>
+					<span class="flex-1 text-sm text-heading">{col.title}</span>
 					<button
-						class="rounded px-2 py-1 text-xs text-neutral-400 hover:bg-neutral-800 hover:text-neutral-100"
+						class="rounded px-2 py-1 text-xs text-muted hover-surface hover:text-heading"
 						onclick={() => startEdit(col)}>Rename</button
 					>
 					<button
-						class="rounded px-2 py-1 text-xs text-red-400 hover:bg-neutral-800 hover:text-red-300"
+						class="rounded px-2 py-1 text-xs text-red-500 hover-surface hover:text-red-600 dark:text-red-400 dark:hover:text-red-300"
 						onclick={() => onDelete(col.id)}>Delete</button
 					>
 				{/if}
@@ -72,7 +72,7 @@
 	</div>
 	<div class="mt-3 flex gap-2">
 		<input
-			class="flex-1 rounded-md border border-neutral-700 bg-neutral-950 px-3 py-1.5 text-sm text-neutral-100 focus:border-blue-500 focus:outline-none"
+			class="input-field flex-1 px-3 py-1.5"
 			placeholder="New column title..."
 			value={newTitle}
 			oninput={(e) => (newTitle = (e.target as HTMLInputElement).value)}
