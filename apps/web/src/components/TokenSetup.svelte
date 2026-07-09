@@ -40,7 +40,15 @@
 		<h1 class="mb-1 text-xl font-bold text-heading">Connect your account</h1>
 		<p class="mb-4 text-sm text-muted">
 			Everything runs in your browser — your token and board state are stored locally and only
-			ever sent to your chosen provider.
+			ever sent to your chosen provider. We never collect or use your token on any server we
+			control.
+			<a
+				class="text-blue-500 hover:underline dark:text-blue-400"
+				href="https://github.com/narze/review365"
+				target="_blank"
+				rel="noreferrer">Review365 is open source</a
+			>
+			— you can verify this yourself.
 		</p>
 
 		<div class="mb-4 inline-flex rounded-md border border-control p-0.5">
