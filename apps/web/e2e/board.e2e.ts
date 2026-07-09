@@ -77,14 +77,12 @@ test.describe("Review365", () => {
     await mockGitHub(page);
     await page.goto("/");
 
-    await expect(page.locator("h1")).toContainText("Review365");
+    await expect(page.locator("h1")).toContainText("Welcome to Review365");
     await expect(page.getByRole("button", { name: "Refresh" })).not.toBeVisible();
-
-    await page.getByRole("button", { name: "Get started" }).click();
-    await expect(page.locator("h1")).toContainText("Connect your account");
+    await expect(page.locator("#token-input")).toBeVisible();
 
     await page.locator("#token-input").fill("ghp_testtoken");
-    await page.getByRole("button", { name: "Connect account" }).click();
+    await page.getByRole("button", { name: "Sign in" }).click();
 
     await expect(page.locator("h1")).toContainText("Review365");
     await expect(page.getByRole("button", { name: "Refresh" })).toBeVisible({ timeout: 5000 });
