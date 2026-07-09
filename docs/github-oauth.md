@@ -30,14 +30,10 @@ the server on the final page load and is less likely to appear in Referer logs.
 
 ## Production (Vercel)
 
+Vercel **Root Directory** is `apps/web` (matches this project's dashboard setting).
+OAuth handlers live at `apps/web/api/auth/github/` and deploy as Edge Functions
+alongside the static site. Shared helpers: `apps/web/api/_lib/github-oauth.ts`.
+Config: `apps/web/vercel.json`.
+
 Set `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` in the project env.
 Callback URL: `https://<your-domain>/api/auth/github/callback`
-
-**Project Root Directory** must be the repository root (not `apps/web`), so
-the `/api` Edge Functions and the static site are deployed together.
-`vercel.json` builds the web app then stages it to `./build` via
-`scripts/stage-web-build.mjs` (handles output in either `apps/web/build` or
-`./build`).
-
-Handlers live under `/api/auth/github/` as Vercel Edge Functions and share
-helpers in `api/_lib/github-oauth.ts`.

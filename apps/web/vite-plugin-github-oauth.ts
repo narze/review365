@@ -15,8 +15,9 @@ import {
   readCookie,
   STATE_COOKIE,
   stateCookieHeader,
-} from "../../api/_lib/github-oauth";
+} from "./api/_lib/github-oauth";
 
+/** Repo root (for .env) — one level above apps/web. */
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
 function sendRedirect(res: ServerResponse, location: string, setCookie?: string) {
