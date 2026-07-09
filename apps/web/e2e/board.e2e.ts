@@ -54,10 +54,14 @@ async function mockGitHub(page: Page, opts: { open?: GHItem[]; merged?: GHItem[]
       await route.fulfill({ json: [] });
       return;
     }
-    if (url.pathname === "/search/repositories") {
+    if (url.pathname === "/user/repos") {
       await route.fulfill({
-        json: { total_count: 1, items: [{ full_name: REPO, archived: false }] },
+        json: [{ full_name: REPO, archived: false }],
       });
+      return;
+    }
+    if (/^\/orgs\/.+\/repos$/.test(url.pathname)) {
+      await route.fulfill({ json: [] });
       return;
     }
     if (/^\/users\/.+\/orgs$/.test(url.pathname)) {

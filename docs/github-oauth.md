@@ -17,7 +17,24 @@ the server on the final page load and is less likely to appear in Referer logs.
 
 ## Scopes
 
-`repo` + `read:org` — same as the recommended classic PAT.
+`repo` + `read:org` — same as the recommended classic PAT. The `repo` scope is required
+so the app can list and read private repositories you can access.
+
+## Private organization repositories
+
+If you connect with GitHub OAuth but only see **public** repos from an organization,
+the org has likely not granted this OAuth app access to private repositories:
+
+1. Open **GitHub → Settings → Applications → Authorized OAuth Apps** and select Review365
+2. Under **Organization access**, click **Grant** (or **Request**) for each org (e.g. `eventpop`)
+3. If the org uses SAML SSO, also click **Authorize** next to the org on that page
+4. Disconnect and **Connect with GitHub** again in Review365 so the token is refreshed
+
+Org admins can also allow the app under **Organization settings → Third-party access**.
+
+Repository search in Review365 lists repos via the GitHub REST API (`/user/repos` and
+`/orgs/{org}/repos`), not the Search API, so private repos appear when your token and
+org policy allow access.
 
 ## Local development
 
