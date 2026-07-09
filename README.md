@@ -26,6 +26,12 @@ bun run dev
 
 Open [http://localhost:5173](http://localhost:5173) in your browser to see the fullstack application.
 
+### Connect with GitHub (OAuth)
+
+Optional. Copy `.env.example` to `.env` and set `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET`
+from a [GitHub OAuth App](https://github.com/settings/developers). Callback URL:
+`http://localhost:5173/api/auth/github/callback`. See [docs/github-oauth.md](docs/github-oauth.md).
+
 ## Git Hooks and Formatting
 
 - Optional native Vite+ hooks: `bun run hooks:setup`

@@ -84,13 +84,36 @@ test.describe("Review365", () => {
     await page.getByRole("link", { name: "Connect account" }).click();
     await expect(page).toHaveURL(/\/settings$/);
     await expect(page.locator("h1")).toContainText("Connect your account");
+    await expect(page.getByRole("button", { name: "Connect with GitHub" })).toBeVisible();
 
+    await page.getByRole("button", { name: "Use a personal access token instead" }).click();
     await page.locator("#token-input").fill("ghp_testtoken");
     await page.getByRole("button", { name: "Connect account" }).click();
 
     await expect(page).toHaveURL(/\/$/);
     await expect(page.locator("h1")).toContainText("Review365");
     await expect(page.getByRole("button", { name: "Refresh" })).toBeVisible({ timeout: 5000 });
+  });
+
+  test("oauth callback: stores token from hash and opens board", async ({ page }) => {
+    await mockGitHub(page);
+    await page.goto("/settings/oauth#access_token=oauth-test-token");
+
+    await expect(page).toHaveURL(/\/$/);
+    await expect(page.getByRole("button", { name: "Refresh" })).toBeVisible({ timeout: 5000 });
+
+    const stored = await page.evaluate(() => ({
+      token: localStorage.getItem("review365:token"),
+      login: localStorage.getItem("review365:login"),
+    }));
+    expect(stored).toEqual({ token: "oauth-test-token", login: "testuser" });
+  });
+
+  test("oauth callback: shows error from query string", async ({ page }) => {
+    await page.goto("/settings/oauth?error=access_denied");
+    await expect(page.locator("h1")).toContainText("Could not connect");
+    await expect(page.getByText(/authorization was cancelled/i)).toBeVisible();
+    await expect(page.getByRole("link", { name: "Back to connect" })).toBeVisible();
   });
 
   test("page loads with title and toolbar", async ({ page }) => {

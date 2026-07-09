@@ -69,3 +69,21 @@ export async function saveToken(platform: Platform, token: string, host?: string
   setPlatform(platform);
   return user;
 }
+
+/** Starts the GitHub OAuth authorize redirect (handled by `/api/auth/github/start`). */
+export function beginGitHubOAuth(): void {
+  window.location.assign("/api/auth/github/start");
+}
+
+const OAUTH_ERROR_MESSAGES: Record<string, string> = {
+  oauth_not_configured:
+    "GitHub OAuth is not configured on this deployment. Use a personal access token instead, or set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET.",
+  invalid_state: "GitHub sign-in expired or was tampered with. Please try again.",
+  access_denied: "GitHub authorization was cancelled.",
+  token_exchange_failed: "Could not complete GitHub sign-in. Please try again.",
+};
+
+export function oauthErrorMessage(code: string | null): string {
+  if (!code) return "GitHub sign-in failed. Please try again.";
+  return OAUTH_ERROR_MESSAGES[code] ?? `GitHub sign-in failed (${code}). Please try again.`;
+}

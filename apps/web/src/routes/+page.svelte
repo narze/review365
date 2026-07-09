@@ -241,8 +241,11 @@
 				A kanban board for your pull/merge request reviews, backed by GitHub or GitLab.
 			</p>
 			<ul class="mb-5 space-y-1.5 text-sm text-muted">
-				<li>Runs entirely in your browser — there is no review365 backend or account.</li>
-				<li>Board state and your access token are stored only in this browser's localStorage.</li>
+				<li>Board state lives in your browser — there is no review365 account.</li>
+				<li>
+					Connect with GitHub (OAuth) or paste a personal access token; credentials stay in
+					this browser's localStorage.
+				</li>
 				<li>
 					Your token is sent only to the GitHub or GitLab API you choose to connect, never
 					anywhere else.
