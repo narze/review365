@@ -73,17 +73,22 @@ async function mockGitHub(page: Page, opts: { open?: GHItem[]; merged?: GHItem[]
 }
 
 test.describe("Review365", () => {
-  test("onboarding: gate shows without token, sign-in reveals board", async ({ page }) => {
+  test("onboarding: gate shows without token, connecting reveals board", async ({ page }) => {
     await mockGitHub(page);
     await page.goto("/");
 
-    await expect(page.locator("h1")).toContainText("Welcome to Review365");
+    await expect(page.locator("h1")).toContainText("Review365");
     await expect(page.getByRole("button", { name: "Refresh" })).not.toBeVisible();
-    await expect(page.locator("#token-input")).toBeVisible();
+    await expect(page.locator("#token-input")).not.toBeVisible();
+
+    await page.getByRole("link", { name: "Connect account" }).click();
+    await expect(page).toHaveURL(/\/settings$/);
+    await expect(page.locator("h1")).toContainText("Connect your account");
 
     await page.locator("#token-input").fill("ghp_testtoken");
-    await page.getByRole("button", { name: "Sign in" }).click();
+    await page.getByRole("button", { name: "Connect account" }).click();
 
+    await expect(page).toHaveURL(/\/$/);
     await expect(page.locator("h1")).toContainText("Review365");
     await expect(page.getByRole("button", { name: "Refresh" })).toBeVisible({ timeout: 5000 });
   });

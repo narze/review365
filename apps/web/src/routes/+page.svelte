@@ -1,6 +1,5 @@
 <script lang="ts">
 	import KanbanBoard from '../components/KanbanBoard.svelte';
-	import TokenSetup from '../components/TokenSetup.svelte';
 	import { onMount } from 'svelte';
 	import type { PRCard, ColumnId, ColumnDef, Signal, Platform } from '@review365/api/types';
 	import { DEFAULT_CONFIG } from '@review365/api/types';
@@ -190,14 +189,6 @@
 		await configService.setColumnWidth(px);
 	}
 
-	function onSignedIn() {
-		platform = getPlatform();
-		login = getLogin();
-		signedIn = true;
-		hydrate();
-		refresh(true);
-	}
-
 	function onSignOut() {
 		signedIn = false;
 		login = null;
@@ -243,7 +234,28 @@
 </script>
 
 {#if !signedIn}
-	<TokenSetup onDone={onSignedIn} />
+	<div class="flex min-h-[60vh] items-center justify-center p-6">
+		<div class="w-full max-w-lg rounded-xl border border-panel surface-panel p-6">
+			<h1 class="mb-1 text-xl font-bold text-heading">Review365</h1>
+			<p class="mb-4 text-sm text-muted">
+				A kanban board for your pull/merge request reviews, backed by GitHub or GitLab.
+			</p>
+			<ul class="mb-5 space-y-1.5 text-sm text-muted">
+				<li>Runs entirely in your browser — there is no review365 backend or account.</li>
+				<li>Board state and your access token are stored only in this browser's localStorage.</li>
+				<li>
+					Your token is sent only to the GitHub or GitLab API you choose to connect, never
+					anywhere else.
+				</li>
+			</ul>
+			<a
+				href="/settings"
+				class="block w-full rounded-md bg-blue-600 px-3 py-2 text-center text-sm font-medium text-white transition-colors hover:bg-blue-500"
+			>
+				Connect account
+			</a>
+		</div>
+	</div>
 {:else}
 	<KanbanBoard
 		{cards}
