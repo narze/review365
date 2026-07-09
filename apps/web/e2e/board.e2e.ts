@@ -247,6 +247,22 @@ test.describe("Review365", () => {
     }
   });
 
+  test("repo filter: adding a repo fetches its PRs immediately", async ({ page }) => {
+    await seedAuth(page, { enabledRepos: [] });
+    await mockGitHub(page, { open: [ghItem(1, "Fresh PR")] });
+
+    await page.goto("/", { waitUntil: "networkidle" });
+    await page.locator("h1").waitFor({ state: "visible" });
+
+    await page.getByRole("button", { name: /Repos \(0\)/ }).click();
+    await page.getByPlaceholder("Type to search your repos...").fill("test");
+    await expect(page.getByText(REPO)).toBeVisible({ timeout: 3000 });
+    await page.getByText(REPO).click();
+
+    await expect(page.getByText("Fresh PR")).toBeVisible({ timeout: 5000 });
+    await expect(page.getByRole("button", { name: /Repos \(1\)/ })).toBeVisible();
+  });
+
   test("export excludes token, import restores board", async ({ page }) => {
     await seedAuth(page, { enabledRepos: [REPO] });
     await mockGitHub(page);
