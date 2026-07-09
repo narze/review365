@@ -19,6 +19,7 @@ import {
   reorderColumns,
   addRule,
   deleteRule,
+  setColumnWidth,
 } from "@review365/api/config";
 import { SIGNAL_LABELS } from "@review365/api/types";
 import type { BoardState, ColumnId, PRCard, Signal } from "@review365/api/types";
@@ -52,6 +53,7 @@ export function loadLocalBoard() {
     orphans: findOrphanedCards(state, config),
     signalLabels: SIGNAL_LABELS,
     mergedRetentionDays: config.mergedRetentionDays ?? 14,
+    columnWidthPx: config.columnWidthPx ?? 300,
   };
 }
 
@@ -183,4 +185,5 @@ export const config = {
   deleteRule: (id: string) => mutateConfig((c) => deleteRule(c, id)),
   setRetention: (days: number) =>
     mutateConfig((c) => ({ ...c, mergedRetentionDays: Math.min(90, Math.max(1, days)) })),
+  setColumnWidth: (px: number) => mutateConfig((c) => setColumnWidth(c, px)),
 };

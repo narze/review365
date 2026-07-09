@@ -33,6 +33,9 @@
 	let mergedRetentionDays = $state<number>(
 		initialLocal?.mergedRetentionDays ?? DEFAULT_CONFIG.mergedRetentionDays ?? 14
 	);
+	let columnWidthPx = $state<number>(
+		initialLocal?.columnWidthPx ?? DEFAULT_CONFIG.columnWidthPx ?? 300
+	);
 	// True only while there are no cards to show yet (first-ever visit, nothing fetched).
 	// Once we have cached or fetched cards, later refreshes happen quietly in the background.
 	let loading = $state(hasToken() && !hasCachedCards());
@@ -51,6 +54,7 @@
 		orphans = local.orphans;
 		signalLabels = local.signalLabels;
 		mergedRetentionDays = local.mergedRetentionDays;
+		columnWidthPx = local.columnWidthPx;
 		cards = loadCachedCards();
 		loading = !hasCachedCards();
 	}
@@ -181,6 +185,11 @@
 		await configService.setRetention(days);
 	}
 
+	async function onSetColumnWidth(px: number) {
+		columnWidthPx = px;
+		await configService.setColumnWidth(px);
+	}
+
 	function onSignedIn() {
 		platform = getPlatform();
 		login = getLogin();
@@ -257,6 +266,8 @@
 		{onReorderColumns}
 		{mergedRetentionDays}
 		{onSetRetention}
+		{columnWidthPx}
+		{onSetColumnWidth}
 		{onSignOut}
 		{platform}
 		{login}

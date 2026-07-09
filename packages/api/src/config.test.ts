@@ -8,6 +8,7 @@ import {
   addRule,
   deleteRule,
   createDefaultConfig,
+  setColumnWidth,
 } from "./config";
 
 function emptyConfig(): BoardConfig {
@@ -66,6 +67,21 @@ describe("deleteColumn", () => {
     expect(result.columns[0].id).toBe("inbox");
     expect(result.rules).toHaveLength(1);
     expect(result.rules[0].id).toBe("r2");
+  });
+
+  it("preserves mergedRetentionDays and columnWidthPx", () => {
+    const config: BoardConfig = {
+      columns: [
+        { id: "inbox", title: "Inbox" },
+        { id: "merged", title: "Merged" },
+      ],
+      rules: [],
+      mergedRetentionDays: 30,
+      columnWidthPx: 480,
+    };
+    const result = deleteColumn(config, "merged");
+    expect(result.mergedRetentionDays).toBe(30);
+    expect(result.columnWidthPx).toBe(480);
   });
 });
 
@@ -137,5 +153,15 @@ describe("createDefaultConfig", () => {
     expect(c.columns.length).toBeGreaterThan(0);
     expect(c.rules.length).toBeGreaterThan(0);
     expect(c.mergedRetentionDays).toBe(14);
+    expect(c.columnWidthPx).toBe(300);
+  });
+});
+
+describe("setColumnWidth", () => {
+  it("clamps to 200–800", () => {
+    const config = emptyConfig();
+    expect(setColumnWidth(config, 150).columnWidthPx).toBe(200);
+    expect(setColumnWidth(config, 500).columnWidthPx).toBe(500);
+    expect(setColumnWidth(config, 900).columnWidthPx).toBe(800);
   });
 });

@@ -28,6 +28,7 @@ export function renameColumn(config: BoardConfig, id: string, title: string): Bo
 
 export function deleteColumn(config: BoardConfig, id: string): BoardConfig {
   return {
+    ...config,
     columns: config.columns.filter((c) => c.id !== id),
     rules: config.rules.filter((r) => r.columnId !== id),
   };
@@ -53,5 +54,12 @@ export function deleteRule(config: BoardConfig, id: string): BoardConfig {
   return {
     ...config,
     rules: config.rules.filter((r) => r.id !== id),
+  };
+}
+
+export function setColumnWidth(config: BoardConfig, px: number): BoardConfig {
+  return {
+    ...config,
+    columnWidthPx: Math.min(800, Math.max(200, px)),
   };
 }

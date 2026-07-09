@@ -25,7 +25,8 @@
 		onColumnDragStart,
 		onColumnDragEnd,
 		sortMode = 'default',
-		onSort = () => {}
+		onSort = () => {},
+		width = 300
 	}: {
 		col: ColumnDef;
 		cards: PRCard[];
@@ -39,6 +40,7 @@
 		onColumnDragEnd?: () => void;
 		sortMode?: SortMode;
 		onSort?: (mode: SortMode) => void;
+		width?: number;
 	} = $props();
 
 	let isOver = $state(false);
@@ -105,9 +107,10 @@
 </script>
 
 <div
-	class="flex max-h-[calc(100vh-100px)] w-[300px] flex-col rounded-xl border bg-neutral-900 transition-colors {isOver
+	class="flex max-h-[calc(100vh-100px)] shrink-0 flex-col rounded-xl border bg-neutral-900 transition-colors {isOver
 		? 'border-blue-500 bg-blue-950/30'
 		: 'border-neutral-800'}"
+	style="width: {width}px"
 	role="region"
 	aria-label={col.title}
 	ondragover={handleColumnDragOver}
