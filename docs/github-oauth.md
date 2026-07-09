@@ -35,7 +35,9 @@ Callback URL: `https://<your-domain>/api/auth/github/callback`
 
 **Project Root Directory** must be the repository root (not `apps/web`), so
 the `/api` Edge Functions and the static site are deployed together.
-`vercel.json` builds the web app and copies it to `./build`.
+`vercel.json` builds the web app then stages it to `./build` via
+`scripts/stage-web-build.mjs` (handles output in either `apps/web/build` or
+`./build`).
 
 Handlers live under `/api/auth/github/` as Vercel Edge Functions and share
 helpers in `api/_lib/github-oauth.ts`.

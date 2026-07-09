@@ -2,6 +2,6 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
   "installCommand": "bun install",
-  "buildCommand": "bun run --filter web build && rm -rf build && cp -a apps/web/build build",
+  "buildCommand": "bun run --filter web build && node scripts/stage-web-build.mjs",
   "outputDirectory": "build"
 }
