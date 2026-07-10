@@ -38,7 +38,7 @@
 		onUnarchive?: (id: string) => void;
 		onUpdateNote?: (cardId: string, note: string) => void;
 		showArchived?: boolean;
-		onColumnDragStart?: () => void;
+		onColumnDragStart?: (height: number) => void;
 		onColumnDragEnd?: () => void;
 		sortMode?: SortMode;
 		onSort?: (mode: SortMode) => void;
@@ -202,7 +202,8 @@
 					ondragstart={(e) => {
 						e.dataTransfer?.setData('application/column-id', col.id);
 						e.dataTransfer!.effectAllowed = 'move';
-						onColumnDragStart();
+						const root = (e.currentTarget as HTMLElement).closest('[role="region"]');
+						onColumnDragStart((root as HTMLElement | null)?.offsetHeight ?? 0);
 					}}
 					ondragend={onColumnDragEnd}
 					class="cursor-grab text-xs text-dim hover:text-muted active:cursor-grabbing"

@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { flip } from 'svelte/animate';
+	import { slide } from 'svelte/transition';
 	import type { PRCard, ColumnId, ColumnDef, Platform } from '@review365/api/types';
 	import KanbanColumn from './KanbanColumn.svelte';
 	import RepoFilter from './RepoFilter.svelte';
@@ -77,8 +79,13 @@
 	let showArchived = $state(false);
 	let refreshing = $state(false);
 	let dragColId: string | null = $state(null);
+	let dragColHeight = $state(0);
 	let dropColTarget: string | null = $state(null);
 	let dropColBefore: boolean = $state(false);
+
+	// Width matches the moved column; height matches the grabbed one so the gap
+	// that opens is the same footprint the column will occupy once dropped.
+	const colGapHeight = $derived(dragColHeight || 300);
 
 	type SortMode = 'default' | 'pr-asc' | 'pr-desc' | 'age-asc' | 'age-desc';
 	let columnSorts = $state<Map<ColumnId, SortMode>>(new Map());
@@ -93,42 +100,59 @@
 		columnSorts = next;
 	}
 
-	function onColumnDragStart(colId: string) {
+	function onColumnDragStart(colId: string, height: number) {
 		dragColId = colId;
+		dragColHeight = height;
 	}
 
 	function onColumnDragEnd() {
 		dragColId = null;
+		dragColHeight = 0;
 		dropColTarget = null;
 	}
 
+	function isColumnDrag(e: DragEvent): boolean {
+		return e.dataTransfer?.types.includes('application/column-id') ?? false;
+	}
+
 	function handleColumnDragOver(e: DragEvent, colId: string) {
-		if (!e.dataTransfer?.types.includes('application/column-id')) return;
+		if (!isColumnDrag(e)) return;
 		e.preventDefault();
 		dropColTarget = colId;
-		const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-		dropColBefore = (e.clientX - rect.left) < rect.width / 2;
+		// Measure against the column itself, not the wrapper: once a gap opens the
+		// wrapper spans column + gap, and halving that would flip the side too late.
+		const rect = (e.currentTarget as HTMLElement)
+			.querySelector('[role="region"]')!
+			.getBoundingClientRect();
+		dropColBefore = e.clientX - rect.left < rect.width / 2;
+	}
+
+	// See the card-side note in KanbanColumn: when the gap opens under a
+	// stationary pointer the element beneath it changes, and an uncancelled
+	// dragenter resets the drop target to <body>, killing dragover/drop.
+	function handleColumnDragEnter(e: DragEvent) {
+		if (!isColumnDrag(e)) return;
+		e.preventDefault();
 	}
 
 	function handleColumnDrop(e: DragEvent, colId: string) {
 		e.preventDefault();
 		const srcId = e.dataTransfer?.getData('application/column-id');
-		if (!srcId || srcId === colId) return;
-		const idx = columns.findIndex((c) => c.id === colId);
-		let insertIdx = idx;
-		if (!dropColBefore && idx < columns.length - 1) insertIdx = idx + 1;
-		const reordered = [...columns];
-		const srcIdx = reordered.findIndex((c) => c.id === srcId);
-		if (srcIdx >= 0) {
-			const [moved] = reordered.splice(srcIdx, 1);
-			// adjust insertIdx if srcIdx was before it
-			if (srcIdx < insertIdx) insertIdx--;
-			reordered.splice(insertIdx, 0, moved);
-		}
-		const ids = reordered.map((c) => c.id);
-		onReorderColumns(ids);
 		dropColTarget = null;
 		dragColId = null;
+		dragColHeight = 0;
+		if (!srcId || srcId === colId) return;
+		// Insert relative to the target in the list with the source removed, so the
+		// index stays valid regardless of which side the source came from. Dropping
+		// on the right half of the last column appends to the end (the gap the user
+		// sees), which the old length-clamped index could not express.
+		const reordered = columns.filter((c) => c.id !== srcId);
+		const moved = columns.find((c) => c.id === srcId);
+		let pos = reordered.findIndex((c) => c.id === colId);
+		if (!moved || pos < 0) return;
+		if (!dropColBefore) pos += 1;
+		reordered.splice(pos, 0, moved);
+		onReorderColumns(reordered.map((c) => c.id));
 	}
 
 	function onThemeChange(next: Theme) {
@@ -306,17 +330,24 @@
 		{#each columns as col (col.id)}
 			<div
 				role="presentation"
+				animate:flip={{ duration: 250 }}
+				ondragenter={handleColumnDragEnter}
 				ondragover={(e) => handleColumnDragOver(e, col.id)}
 				ondragleave={() => {
 					if (dropColTarget === col.id) dropColTarget = null;
 				}}
 				ondrop={(e) => handleColumnDrop(e, col.id)}
-				class="rounded-xl transition-all {dropColTarget === col.id
-					? dropColBefore
-						? 'border-l-4 border-l-blue-500'
-						: 'border-r-4 border-r-blue-500'
+				class="flex items-start gap-4 transition-opacity {dragColId === col.id
+					? 'opacity-40'
 					: ''}"
 			>
+				{#if dropColTarget === col.id && dropColBefore && col.id !== dragColId}
+					<div
+						class="column-drop-slot"
+						style="width: {columnWidthPx}px; height: {colGapHeight}px"
+						transition:slide={{ axis: 'x', duration: 150 }}
+					></div>
+				{/if}
 				<KanbanColumn
 					{col}
 					width={columnWidthPx}
@@ -327,11 +358,18 @@
 					onUnarchive={onUnarchiveCard}
 					onUpdateNote={onUpdateNote}
 					{showArchived}
-					onColumnDragStart={() => onColumnDragStart(col.id)}
+					onColumnDragStart={(height) => onColumnDragStart(col.id, height)}
 					onColumnDragEnd={onColumnDragEnd}
 					sortMode={columnSorts.get(col.id) ?? 'default'}
 					onSort={(mode) => onSortColumn(col.id, mode as SortMode)}
 				/>
+				{#if dropColTarget === col.id && !dropColBefore && col.id !== dragColId}
+					<div
+						class="column-drop-slot"
+						style="width: {columnWidthPx}px; height: {colGapHeight}px"
+						transition:slide={{ axis: 'x', duration: 150 }}
+					></div>
+				{/if}
 			</div>
 		{/each}
 		{#if orphanedCards().length > 0}
@@ -350,3 +388,15 @@
 </div>
 
 {/if}
+
+<style>
+	.column-drop-slot {
+		/* Visual only: pointer-events off so the pointer keeps hitting the
+		   column wrapper (the drop target) even after the gap opens under it. */
+		pointer-events: none;
+		flex-shrink: 0;
+		border-radius: 0.75rem;
+		border: 2px dashed rgba(59, 130, 246, 0.55);
+		background: rgba(59, 130, 246, 0.08);
+	}
+</style>
