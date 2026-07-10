@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { PRCard, Signal } from '@review365/api/types';
+	import { startCardDrag, endCardDrag } from '$lib/drag-state.svelte';
 
 	let {
 		card,
@@ -27,11 +28,13 @@
 		didDrag = false;
 		e.dataTransfer?.setData('text/plain', card.id);
 		const el = e.target as HTMLElement;
+		startCardDrag(card.id, el.offsetHeight);
 		el.classList.add('dragging');
 	}
 
 	function handleDragEnd(e: DragEvent) {
 		didDrag = true;
+		endCardDrag();
 		const el = e.target as HTMLElement;
 		el.classList.remove('dragging');
 	}
