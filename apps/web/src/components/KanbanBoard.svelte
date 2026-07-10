@@ -187,37 +187,47 @@
 	}
 </script>
 
-<div class="flex items-center gap-3 border-b border-panel px-6 py-3">
-	<h1 class="text-xl font-bold text-heading">Review365</h1>
-	<RepoFilter {enabledRepos} {repoCounts} onToggle={onToggleRepo} />
-	<span class="text-sm text-muted">
+<div class="flex flex-wrap items-center gap-2 border-b border-panel px-3 py-3 sm:gap-3 sm:px-6">
+	<h1 class="order-1 text-lg font-bold text-heading sm:text-xl">Review365</h1>
+
+	<div class="order-2 ml-auto flex gap-2 sm:order-5">
+		<button
+			class="btn-secondary px-2.5 py-1.5 text-sm text-heading disabled:opacity-40 sm:px-3"
+			disabled={refreshing}
+			onclick={handleRefresh}
+		>
+			{#if refreshing}
+				⏳<span class="hidden sm:inline"> Fetching...</span>
+			{:else}
+				🔄<span class="hidden sm:inline"> Refresh</span>
+			{/if}
+		</button>
+		<button
+			class="btn-secondary px-2.5 py-1.5 text-sm text-heading sm:px-3 {showSettings ? 'border-blue-500' : ''}"
+			onclick={() => (showSettings = !showSettings)}
+		>
+			⚙️<span class="hidden sm:inline"> Settings</span>
+		</button>
+	</div>
+
+	<div class="order-3 sm:order-2">
+		<RepoFilter {enabledRepos} {repoCounts} onToggle={onToggleRepo} />
+	</div>
+
+	<span class="order-4 w-full text-sm text-muted sm:order-3 sm:w-auto">
 		{enabledRepos.length === 0
 			? 'Select repos to view →'
 			: `${filteredCards.length} of ${cards.length} PRs across ${columns.length} columns`}
 	</span>
+
 	{#if archivedCount > 0}
 		<button
-			class="btn-secondary px-2.5 py-1 text-xs {showArchived ? 'border-blue-500' : ''}"
+			class="btn-secondary order-5 px-2.5 py-1 text-xs sm:order-4 {showArchived ? 'border-blue-500' : ''}"
 			onclick={() => (showArchived = !showArchived)}
 		>
 			📦 {archivedCount} archived {showArchived ? '(showing)' : '(hidden)'}
 		</button>
 	{/if}
-	<div class="ml-auto flex gap-2">
-		<button
-			class="btn-secondary px-3 py-1.5 text-sm text-heading disabled:opacity-40"
-			disabled={refreshing}
-			onclick={handleRefresh}
-		>
-			{refreshing ? '⏳ Fetching...' : '🔄 Refresh'}
-		</button>
-		<button
-			class="btn-secondary px-3 py-1.5 text-sm text-heading {showSettings ? 'border-blue-500' : ''}"
-			onclick={() => (showSettings = !showSettings)}
-		>
-			⚙️ Settings
-		</button>
-	</div>
 </div>
 
 {#if !online}
