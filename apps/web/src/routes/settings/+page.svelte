@@ -7,4 +7,8 @@
 	}
 </script>
 
+<svelte:head>
+	<title>Settings · Review365</title>
+</svelte:head>
+
 <TokenSetup {onDone} />
