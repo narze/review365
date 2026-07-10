@@ -236,6 +236,11 @@
 	});
 </script>
 
+<svelte:head>
+	<title>Review365</title>
+	<meta name="description" content="A Kanban board for tracking PR/MR reviews across your repos" />
+</svelte:head>
+
 {#if !signedIn}
 	<div class="flex min-h-[60vh] items-center justify-center p-6">
 		<div class="w-full max-w-lg rounded-xl border border-panel surface-panel p-6">
