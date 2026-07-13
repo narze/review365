@@ -327,6 +327,13 @@
 		focusCard(id);
 	}
 
+	// Clicking a card makes it the selection: move the ring here and take DOM
+	// focus (so Enter/Space/N work), but don't scroll — it's already in view.
+	function onSelectCard(id: string) {
+		focusedCardId = id;
+		findCardEl(id)?.focus({ preventScroll: true });
+	}
+
 	function focusColumnEdge(dir: 'up' | 'down') {
 		const id = columnEdgeId(nav.grid, focusedCardId, dir === 'up' ? 'top' : 'bottom');
 		if (id) focusCard(id);
@@ -540,6 +547,7 @@
 					sortMode={columnSorts.get(col.id) ?? 'default'}
 					onSort={(mode) => onSortColumn(col.id, mode as SortMode)}
 					{focusedCardId}
+					{onSelectCard}
 				/>
 			</div>
 		{/each}
@@ -555,6 +563,7 @@
 				onUpdateNote={onUpdateNote}
 				{showArchived}
 				{focusedCardId}
+				{onSelectCard}
 			/>
 {/if}
 </div>

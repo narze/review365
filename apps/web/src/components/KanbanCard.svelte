@@ -8,13 +8,15 @@
 		onArchive,
 		onUnarchive,
 		onUpdateNote,
-		focused = false
+		focused = false,
+		onSelect
 	}: {
 		card: PRCard;
 		onArchive?: (id: string) => void;
 		onUnarchive?: (id: string) => void;
 		onUpdateNote?: (cardId: string, note: string) => void;
 		focused?: boolean;
+		onSelect?: (id: string) => void;
 	} = $props();
 
 	let expanded = $state(false);
@@ -129,6 +131,7 @@
 	ondragstart={handleDragStart}
 	ondragend={handleDragEnd}
 	onkeydown={handleCardKeydown}
+	onclick={() => onSelect?.(card.id)}
 	role="listitem"
 >
 	<div class="mb-1 text-xs font-medium text-blue-500 dark:text-blue-400">{card.repo} <span class="text-blue-600 dark:text-blue-300">{card.platform === 'gitlab' ? '!' : '#'}{card.prNumber}</span></div>

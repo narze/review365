@@ -297,6 +297,30 @@ test.describe("Review365", () => {
     expect(popup.url()).toContain(`/${REPO}/pull/`);
   });
 
+  test("keyboard: clicking a card makes it the selection", async ({ page }) => {
+    await seedAuth(page, { enabledRepos: [REPO] });
+    await mockGitHub(page, {
+      open: [ghItem(1, "First PR"), ghItem(2, "Second PR"), ghItem(3, "Third PR")],
+    });
+
+    await page.goto("/", { waitUntil: "networkidle" });
+    await page.locator("h1").waitFor({ state: "visible" });
+    await expect(page.getByText("Third PR")).toBeVisible({ timeout: 5000 });
+
+    const focusedId = () =>
+      page.evaluate(() => document.activeElement?.getAttribute("data-card-id") ?? null);
+    const order = await page
+      .getByRole("region", { name: "📥 Inbox" })
+      .locator("[data-card-id]")
+      .evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.cardId ?? null));
+
+    // Clicking the middle card selects it; keyboard nav then continues from there.
+    await page.getByText("Second PR").click();
+    expect(await focusedId()).toBe(order[1]);
+    await page.keyboard.press("ArrowUp");
+    expect(await focusedId()).toBe(order[0]);
+  });
+
   test("keyboard: Shift+Arrow moves a card and note editing suspends navigation", async ({
     page,
   }) => {

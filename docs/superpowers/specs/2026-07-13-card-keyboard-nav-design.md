@@ -16,6 +16,8 @@ PR cards, the focused card scrolls into view, and a small set of keys act on it.
   column, clamped to that column's card count. Empty adjacent columns are skipped.
 - Pressing any arrow when no card is focused focuses the first card of the first
   non-empty column (entry).
+- Clicking a card selects it (moves the ring there and takes DOM focus, without
+  scrolling), so keyboard navigation continues from the clicked card.
 - `Escape` clears focus.
 
 The focused card scrolls into view (both the horizontal board scroll and the
