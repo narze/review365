@@ -263,6 +263,74 @@ test.describe("Review365", () => {
     await expect(page.getByRole("button", { name: /Repos \(1\)/ })).toBeVisible();
   });
 
+  test("keyboard: arrows move focus between cards and Enter opens the PR", async ({ page }) => {
+    await seedAuth(page, { enabledRepos: [REPO] });
+    await mockGitHub(page, { open: [ghItem(1, "First PR"), ghItem(2, "Second PR")] });
+
+    await page.goto("/", { waitUntil: "networkidle" });
+    await page.locator("h1").waitFor({ state: "visible" });
+    await expect(page.getByText("First PR")).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText("Second PR")).toBeVisible();
+
+    const focusedId = () =>
+      page.evaluate(() => document.activeElement?.getAttribute("data-card-id") ?? null);
+
+    // Entry: first arrow focuses the first card in the first non-empty column.
+    await page.keyboard.press("ArrowDown");
+    const id1 = await focusedId();
+    expect(id1).not.toBeNull();
+
+    // Down moves to the next card, up returns.
+    await page.keyboard.press("ArrowDown");
+    const id2 = await focusedId();
+    expect(id2).not.toBeNull();
+    expect(id2).not.toBe(id1);
+
+    await page.keyboard.press("ArrowUp");
+    expect(await focusedId()).toBe(id1);
+
+    // Enter opens the focused PR in a new tab.
+    const popup = await Promise.all([
+      page.waitForEvent("popup"),
+      page.keyboard.press("Enter"),
+    ]).then(([p]) => p);
+    expect(popup.url()).toContain(`/${REPO}/pull/`);
+  });
+
+  test("keyboard: Shift+Arrow moves a card and note editing suspends navigation", async ({
+    page,
+  }) => {
+    await seedAuth(page, { enabledRepos: [REPO] });
+    await mockGitHub(page, { open: [ghItem(1, "Movable PR")] });
+
+    await page.goto("/", { waitUntil: "networkidle" });
+    await page.locator("h1").waitFor({ state: "visible" });
+    await expect(page.getByText("Movable PR")).toBeVisible({ timeout: 5000 });
+
+    const focusedId = () =>
+      page.evaluate(() => document.activeElement?.getAttribute("data-card-id") ?? null);
+
+    // Focus the card, then shift it to the adjacent column.
+    await page.keyboard.press("ArrowDown");
+    const id = await focusedId();
+    expect(id).not.toBeNull();
+
+    await page.keyboard.press("Shift+ArrowRight");
+    // Card now lives in the next column, and keeps focus.
+    await expect(
+      page.getByRole("region", { name: "👀 Reviewing" }).getByText("Movable PR"),
+    ).toBeVisible({ timeout: 3000 });
+    expect(await focusedId()).toBe(id);
+
+    // Start editing the note; navigation keys must not steal focus from the input.
+    await page.keyboard.press("n");
+    const noteInput = page.locator("input[maxlength='200']");
+    await expect(noteInput).toBeFocused();
+    await page.keyboard.press("ArrowDown");
+    await expect(noteInput).toBeFocused();
+    expect(await focusedId()).toBeNull();
+  });
+
   test("export excludes token, import restores board", async ({ page }) => {
     await seedAuth(page, { enabledRepos: [REPO] });
     await mockGitHub(page);

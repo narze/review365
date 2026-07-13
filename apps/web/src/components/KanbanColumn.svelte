@@ -28,7 +28,8 @@
 		onColumnDragEnd,
 		sortMode = 'default',
 		onSort = () => {},
-		width = 300
+		width = 300,
+		focusedCardId = null
 	}: {
 		col: ColumnDef;
 		cards: PRCard[];
@@ -43,6 +44,7 @@
 		sortMode?: SortMode;
 		onSort?: (mode: SortMode) => void;
 		width?: number;
+		focusedCardId?: string | null;
 	} = $props();
 
 	let isOver = $state(false);
@@ -224,7 +226,7 @@
 					></div>
 				{/if}
 				<div role="presentation" ondragover={(e) => handleCardDragOver(e, card.id)}>
-					<KanbanCard {card} {onArchive} {onUnarchive} {onUpdateNote} />
+					<KanbanCard {card} {onArchive} {onUnarchive} {onUpdateNote} focused={card.id === focusedCardId} />
 				</div>
 				{#if dropTargetId === card.id && !dropAbove && card.id !== cardDrag.cardId}
 					<div
