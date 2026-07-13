@@ -91,15 +91,23 @@ Owns focus state and the global key handler.
   2. **Arrows** (no Shift) → `preventDefault`; `next = nextCardId(grid, focusedCardId, dir)`;
      if `next` and `next !== focusedCardId` set focus + scroll.
   3. **Shift+Arrows** → resolve the focused card's column and row from `grid`:
-     - `Shift+←/→` → `onMoveCard(id, adjacentColId)` (appends to that column).
+     - `Shift+←/→` → `onReorderCard(id, targetCardId, adjacentColId)`. The card
+       lands at the **same row** in the target column (`grid[adj][row] ?? null`),
+       not the end. A `returnSlots` map remembers the card it sat above before the
+       move; moving it straight back to that column restores the exact slot.
      - `Shift+↑` → `onReorderCard(id, prevCardId, colId)` (target = card at `row-1`;
        no-op at `row 0`).
      - `Shift+↓` → `onReorderCard(id, afterNextCardId, colId)` where
        `afterNextCardId = grid[col][row+2] ?? null`; no-op if already last.
+     - `Ctrl/Cmd+↑/↓` (focus) → `columnEdgeId`; `Ctrl/Cmd+Shift+↑/↓` (move) →
+       reorder to `grid[col][0]` / `null` (top / bottom of the column).
      - Focus stays on `id`; scroll into view after the DOM updates.
-- Focus + scroll helper: `el = document.querySelector('[data-card-id="…"]')`;
-  `el.focus({ preventScroll: true })`; `el.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' })`.
-  Run after paint (e.g. `tick()` / microtask) so moved cards are in place.
+- Focus + scroll helper: find the card by `data-card-id`, `el.focus({ preventScroll: true })`,
+  then `el.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' })`.
+  Run after `tick()`. A reorder plays an `animate:flip`, so first await the column's
+  in-flight animations (`container.getAnimations({ subtree: true })`) — otherwise
+  `scrollIntoView` reads the card's transformed mid-flight rect and scrolls to its
+  old position. Bail if focus moved on while waiting.
 - Passes `focusedCardId` down to each `KanbanColumn` → `KanbanCard`.
 
 `reorderCard(state, cardId, targetCardId, column)` inserts `cardId` **before**

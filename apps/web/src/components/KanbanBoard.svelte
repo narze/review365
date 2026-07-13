@@ -192,6 +192,12 @@
 
 	let focusedCardId = $state<string | null>(null);
 
+	// Remembers where a card sat before a keyboard column-move, so moving it back
+	// drops it into its old slot instead of the end. Keyed by card id; `beforeId`
+	// is the card it used to sit above (null = it was last). Plain memory, not
+	// reactive — it only informs the next move.
+	const returnSlots = new Map<string, { column: ColumnId; beforeId: string | null }>();
+
 	const ARROW: Record<string, Dir> = {
 		ArrowUp: 'up',
 		ArrowDown: 'down',
@@ -232,14 +238,31 @@
 		return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable;
 	}
 
+	function findCardEl(id: string): HTMLElement | null {
+		return (
+			[...document.querySelectorAll<HTMLElement>('[data-card-id]')].find(
+				(e) => e.dataset.cardId === id
+			) ?? null
+		);
+	}
+
 	async function focusCard(id: string) {
 		focusedCardId = id;
 		await tick();
-		const el = [...document.querySelectorAll<HTMLElement>('[data-card-id]')].find(
-			(e) => e.dataset.cardId === id
-		);
-		el?.focus({ preventScroll: true });
-		el?.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+		const el = findCardEl(id);
+		if (!el) return;
+		el.focus({ preventScroll: true });
+		// A reorder plays an `animate:flip`; scrollIntoView would otherwise read the
+		// card's mid-flight (transformed) rect and scroll to its old spot. Svelte
+		// starts the flip on the next frame, so wait a frame for it to register,
+		// then let the column's animations settle before scrolling.
+		await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
+		const container = el.closest('.column-body');
+		const anims = container?.getAnimations?.({ subtree: true }) ?? [];
+		if (anims.length) await Promise.allSettled(anims.map((a) => a.finished));
+		// Focus may have moved on while we waited — don't yank the scroll back.
+		if (focusedCardId !== id) return;
+		el.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
 	}
 
 	function focusPos(): { col: number; row: number } | null {
@@ -278,7 +301,26 @@
 			if (targetIdx < 0 || targetIdx >= nav.colIds.length) return;
 			const targetColId = nav.colIds[targetIdx];
 			if (targetColId === '__orphaned__') return;
-			onMoveCard(id, targetColId);
+
+			const originColId = nav.colIds[col];
+			const targetCol = nav.grid[targetIdx];
+			const remembered = returnSlots.get(id);
+
+			let targetCardId: string | null;
+			if (remembered && remembered.column === targetColId) {
+				// Returning to the column we just left → restore the old slot.
+				targetCardId =
+					remembered.beforeId && targetCol.includes(remembered.beforeId)
+						? remembered.beforeId
+						: null;
+				returnSlots.delete(id);
+			} else {
+				// Leaving a column → remember the card we sat above, and land at the
+				// same row in the target so the layout stays predictable.
+				returnSlots.set(id, { column: originColId, beforeId: nav.grid[col][row + 1] ?? null });
+				targetCardId = targetCol[row] ?? null;
+			}
+			onReorderCard(id, targetCardId, targetColId);
 		}
 
 		await tick();
