@@ -6,7 +6,9 @@
 	import RuleManager from './RuleManager.svelte';
 	import AccountSettings from './AccountSettings.svelte';
 	import { SvelteMap } from 'svelte/reactivity';
+	import { tick } from 'svelte';
 	import { getTheme, setTheme, type Theme } from '$lib/theme';
+	import { nextCardId, columnEdgeId, type Dir } from '$lib/card-navigation';
 
 	let {
 		cards = [],
@@ -185,6 +187,219 @@
 		const orphanIds = new Set(orphans.map((o) => o.cardId));
 		return filteredCards.filter((c) => orphanIds.has(c.id));
 	}
+
+	// --- Keyboard navigation -------------------------------------------------
+
+	let focusedCardId = $state<string | null>(null);
+
+	// Remembers where a card sat before a keyboard column-move, so moving it back
+	// drops it into its old slot instead of the end. Keyed by card id; `beforeId`
+	// is the card it used to sit above (null = it was last). Plain memory, not
+	// reactive — it only informs the next move.
+	const returnSlots = new Map<string, { column: ColumnId; beforeId: string | null }>();
+
+	const ARROW: Record<string, Dir> = {
+		ArrowUp: 'up',
+		ArrowDown: 'down',
+		ArrowLeft: 'left',
+		ArrowRight: 'right'
+	};
+
+	// The board as columns of visible card ids, in on-screen order, plus the
+	// parallel column ids (with the orphaned bucket last when present). This is
+	// the single source of truth for both focus movement and shift-to-move.
+	const nav = $derived.by(() => {
+		const vis = (arr: PRCard[]) => (showArchived ? arr : arr.filter((c) => !c.archived));
+		const grid: string[][] = [];
+		const colIds: string[] = [];
+		for (const col of columns) {
+			grid.push(vis(cardsForColumn(col.id)).map((c) => c.id));
+			colIds.push(col.id);
+		}
+		const orph = vis(orphanedCards()).map((c) => c.id);
+		if (orph.length) {
+			grid.push(orph);
+			colIds.push('__orphaned__');
+		}
+		return { grid, colIds };
+	});
+
+	// Drop focus if the focused card leaves the board (refresh, filter, repo change).
+	$effect(() => {
+		if (focusedCardId && !nav.grid.some((col) => col.includes(focusedCardId!))) {
+			focusedCardId = null;
+		}
+	});
+
+	function isEditable(target: EventTarget | null): boolean {
+		const el = target as HTMLElement | null;
+		if (!el) return false;
+		const tag = el.tagName;
+		return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable;
+	}
+
+	function findCardEl(id: string): HTMLElement | null {
+		return (
+			[...document.querySelectorAll<HTMLElement>('[data-card-id]')].find(
+				(e) => e.dataset.cardId === id
+			) ?? null
+		);
+	}
+
+	async function focusCard(id: string) {
+		focusedCardId = id;
+		await tick();
+		const el = findCardEl(id);
+		if (!el) return;
+		el.focus({ preventScroll: true });
+		// A reorder plays an `animate:flip`; scrollIntoView would otherwise read the
+		// card's mid-flight (transformed) rect and scroll to its old spot. Svelte
+		// starts the flip on the next frame, so wait a frame for it to register,
+		// then let the column's animations settle before scrolling.
+		await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
+		const container = el.closest('.column-body');
+		const anims = container?.getAnimations?.({ subtree: true }) ?? [];
+		if (anims.length) await Promise.allSettled(anims.map((a) => a.finished));
+		// Focus may have moved on while we waited — don't yank the scroll back.
+		if (focusedCardId !== id) return;
+		el.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+	}
+
+	function focusPos(): { col: number; row: number } | null {
+		if (!focusedCardId) return null;
+		for (let c = 0; c < nav.grid.length; c++) {
+			const r = nav.grid[c].indexOf(focusedCardId);
+			if (r >= 0) return { col: c, row: r };
+		}
+		return null;
+	}
+
+	async function moveFocusedCard(dir: Dir) {
+		const pos = focusPos();
+		if (!pos || !focusedCardId) return;
+		const { col, row } = pos;
+		const id = focusedCardId;
+
+		if (dir === 'up' || dir === 'down') {
+			const columnId = nav.colIds[col];
+			if (columnId === '__orphaned__') return;
+			// Reorder writes card `order`; a column shown under an active sort ignores
+			// order, so the move would be an invisible no-op — skip it.
+			const mode = columnSorts.get(columnId);
+			if (mode && mode !== 'default') return;
+			const cardIds = nav.grid[col];
+			if (dir === 'up') {
+				if (row === 0) return;
+				onReorderCard(id, cardIds[row - 1], columnId);
+			} else {
+				if (row >= cardIds.length - 1) return;
+				onReorderCard(id, cardIds[row + 2] ?? null, columnId);
+			}
+		} else {
+			const step = dir === 'left' ? -1 : 1;
+			const targetIdx = col + step;
+			if (targetIdx < 0 || targetIdx >= nav.colIds.length) return;
+			const targetColId = nav.colIds[targetIdx];
+			if (targetColId === '__orphaned__') return;
+
+			const originColId = nav.colIds[col];
+			const targetCol = nav.grid[targetIdx];
+			const remembered = returnSlots.get(id);
+
+			let targetCardId: string | null;
+			if (remembered && remembered.column === targetColId) {
+				// Returning to the column we just left → restore the old slot.
+				targetCardId =
+					remembered.beforeId && targetCol.includes(remembered.beforeId)
+						? remembered.beforeId
+						: null;
+				returnSlots.delete(id);
+			} else {
+				// Leaving a column → remember the card we sat above, and land at the
+				// same row in the target so the layout stays predictable.
+				returnSlots.set(id, { column: originColId, beforeId: nav.grid[col][row + 1] ?? null });
+				targetCardId = targetCol[row] ?? null;
+			}
+			onReorderCard(id, targetCardId, targetColId);
+		}
+
+		await tick();
+		focusCard(id);
+	}
+
+	// Clicking a card makes it the selection: move the ring here and take DOM
+	// focus (so Enter/Space/N work), but don't scroll — it's already in view.
+	function onSelectCard(id: string) {
+		focusedCardId = id;
+		findCardEl(id)?.focus({ preventScroll: true });
+	}
+
+	function focusColumnEdge(dir: 'up' | 'down') {
+		const id = columnEdgeId(nav.grid, focusedCardId, dir === 'up' ? 'top' : 'bottom');
+		if (id) focusCard(id);
+	}
+
+	// Reorder the focused card to the very top / bottom of its column.
+	async function moveFocusedCardToEdge(dir: 'up' | 'down') {
+		const pos = focusPos();
+		if (!pos || !focusedCardId) return;
+		const { col, row } = pos;
+		const columnId = nav.colIds[col];
+		if (columnId === '__orphaned__') return;
+		const mode = columnSorts.get(columnId);
+		if (mode && mode !== 'default') return;
+		const cardIds = nav.grid[col];
+		const id = focusedCardId;
+		if (dir === 'up') {
+			if (row === 0) return;
+			onReorderCard(id, cardIds[0], columnId);
+		} else {
+			if (row >= cardIds.length - 1) return;
+			onReorderCard(id, null, columnId);
+		}
+		await tick();
+		focusCard(id);
+	}
+
+	function handleKeydown(e: KeyboardEvent) {
+		if (isEditable(e.target)) return;
+
+		if (e.key === 'Escape') {
+			if (focusedCardId) {
+				focusedCardId = null;
+				(document.activeElement as HTMLElement | null)?.blur();
+			}
+			return;
+		}
+
+		const dir = ARROW[e.key];
+		if (!dir) return;
+
+		// Ctrl/Cmd jumps to the column edge (Up/Down only, and only once a card is
+		// focused). Cmd+←/→ is left to the browser's history navigation.
+		if (e.metaKey || e.ctrlKey) {
+			if ((dir === 'up' || dir === 'down') && focusedCardId) {
+				e.preventDefault();
+				if (e.shiftKey) moveFocusedCardToEdge(dir);
+				else focusColumnEdge(dir);
+			}
+			return;
+		}
+
+		e.preventDefault();
+
+		if (e.shiftKey) {
+			moveFocusedCard(dir);
+		} else {
+			const next = nextCardId(nav.grid, focusedCardId, dir);
+			if (next) focusCard(next);
+		}
+	}
+
+	$effect(() => {
+		window.addEventListener('keydown', handleKeydown);
+		return () => window.removeEventListener('keydown', handleKeydown);
+	});
 </script>
 
 <div class="flex flex-wrap items-center gap-2 border-b border-panel px-3 py-3 sm:gap-3 sm:px-6">
@@ -331,6 +546,8 @@
 					onColumnDragEnd={onColumnDragEnd}
 					sortMode={columnSorts.get(col.id) ?? 'default'}
 					onSort={(mode) => onSortColumn(col.id, mode as SortMode)}
+					{focusedCardId}
+					{onSelectCard}
 				/>
 			</div>
 		{/each}
@@ -345,6 +562,8 @@
 				onUnarchive={onUnarchiveCard}
 				onUpdateNote={onUpdateNote}
 				{showArchived}
+				{focusedCardId}
+				{onSelectCard}
 			/>
 {/if}
 </div>

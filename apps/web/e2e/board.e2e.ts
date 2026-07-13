@@ -46,7 +46,7 @@ async function mockGitHub(page: Page, opts: { open?: GHItem[]; merged?: GHItem[]
     }
     if (url.pathname === "/search/issues") {
       const q = url.searchParams.get("q") ?? "";
-      const items = q.includes("is:merged") ? opts.merged ?? [] : [];
+      const items = q.includes("is:merged") ? (opts.merged ?? []) : [];
       await route.fulfill({ json: { total_count: items.length, items } });
       return;
     }
@@ -261,6 +261,216 @@ test.describe("Review365", () => {
 
     await expect(page.getByText("Fresh PR")).toBeVisible({ timeout: 5000 });
     await expect(page.getByRole("button", { name: /Repos \(1\)/ })).toBeVisible();
+  });
+
+  test("keyboard: arrows move focus between cards and Enter opens the PR", async ({ page }) => {
+    await seedAuth(page, { enabledRepos: [REPO] });
+    await mockGitHub(page, { open: [ghItem(1, "First PR"), ghItem(2, "Second PR")] });
+
+    await page.goto("/", { waitUntil: "networkidle" });
+    await page.locator("h1").waitFor({ state: "visible" });
+    await expect(page.getByText("First PR")).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText("Second PR")).toBeVisible();
+
+    const focusedId = () =>
+      page.evaluate(() => document.activeElement?.getAttribute("data-card-id") ?? null);
+
+    // Entry: first arrow focuses the first card in the first non-empty column.
+    await page.keyboard.press("ArrowDown");
+    const id1 = await focusedId();
+    expect(id1).not.toBeNull();
+
+    // Down moves to the next card, up returns.
+    await page.keyboard.press("ArrowDown");
+    const id2 = await focusedId();
+    expect(id2).not.toBeNull();
+    expect(id2).not.toBe(id1);
+
+    await page.keyboard.press("ArrowUp");
+    expect(await focusedId()).toBe(id1);
+
+    // Enter opens the focused PR in a new tab.
+    const popup = await Promise.all([
+      page.waitForEvent("popup"),
+      page.keyboard.press("Enter"),
+    ]).then(([p]) => p);
+    expect(popup.url()).toContain(`/${REPO}/pull/`);
+  });
+
+  test("keyboard: clicking a card makes it the selection", async ({ page }) => {
+    await seedAuth(page, { enabledRepos: [REPO] });
+    await mockGitHub(page, {
+      open: [ghItem(1, "First PR"), ghItem(2, "Second PR"), ghItem(3, "Third PR")],
+    });
+
+    await page.goto("/", { waitUntil: "networkidle" });
+    await page.locator("h1").waitFor({ state: "visible" });
+    await expect(page.getByText("Third PR")).toBeVisible({ timeout: 5000 });
+
+    const focusedId = () =>
+      page.evaluate(() => document.activeElement?.getAttribute("data-card-id") ?? null);
+    const order = await page
+      .getByRole("region", { name: "📥 Inbox" })
+      .locator("[data-card-id]")
+      .evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.cardId ?? null));
+
+    // Clicking the middle card selects it; keyboard nav then continues from there.
+    await page.getByText("Second PR").click();
+    expect(await focusedId()).toBe(order[1]);
+    await page.keyboard.press("ArrowUp");
+    expect(await focusedId()).toBe(order[0]);
+  });
+
+  test("keyboard: Shift+Arrow moves a card and note editing suspends navigation", async ({
+    page,
+  }) => {
+    await seedAuth(page, { enabledRepos: [REPO] });
+    await mockGitHub(page, { open: [ghItem(1, "Movable PR")] });
+
+    await page.goto("/", { waitUntil: "networkidle" });
+    await page.locator("h1").waitFor({ state: "visible" });
+    await expect(page.getByText("Movable PR")).toBeVisible({ timeout: 5000 });
+
+    const focusedId = () =>
+      page.evaluate(() => document.activeElement?.getAttribute("data-card-id") ?? null);
+
+    // Focus the card, then shift it to the adjacent column.
+    await page.keyboard.press("ArrowDown");
+    const id = await focusedId();
+    expect(id).not.toBeNull();
+
+    await page.keyboard.press("Shift+ArrowRight");
+    // Card now lives in the next column, and keeps focus.
+    await expect(
+      page.getByRole("region", { name: "👀 Reviewing" }).getByText("Movable PR"),
+    ).toBeVisible({ timeout: 3000 });
+    expect(await focusedId()).toBe(id);
+
+    // Start editing the note; navigation keys must not steal focus from the input.
+    await page.keyboard.press("n");
+    const noteInput = page.locator("input[maxlength='200']");
+    await expect(noteInput).toBeFocused();
+    await page.keyboard.press("ArrowDown");
+    await expect(noteInput).toBeFocused();
+    expect(await focusedId()).toBeNull();
+  });
+
+  test("keyboard: Ctrl/Cmd+Up/Down jump to and move cards to column edges", async ({ page }) => {
+    await seedAuth(page, { enabledRepos: [REPO] });
+    await mockGitHub(page, {
+      open: [ghItem(1, "Alpha PR"), ghItem(2, "Beta PR"), ghItem(3, "Gamma PR")],
+    });
+
+    await page.goto("/", { waitUntil: "networkidle" });
+    await page.locator("h1").waitFor({ state: "visible" });
+    await expect(page.getByText("Gamma PR")).toBeVisible({ timeout: 5000 });
+
+    const focusedId = () =>
+      page.evaluate(() => document.activeElement?.getAttribute("data-card-id") ?? null);
+    const columnOrder = () =>
+      page
+        .getByRole("region", { name: "📥 Inbox" })
+        .locator("[data-card-id]")
+        .evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.cardId ?? null));
+
+    await page.keyboard.press("ArrowDown");
+    const order = await columnOrder();
+    expect(order.length).toBe(3);
+
+    // Jump to the bottom, then back to the top.
+    await page.keyboard.press("ControlOrMeta+ArrowDown");
+    expect(await focusedId()).toBe(order[2]);
+    await page.keyboard.press("ControlOrMeta+ArrowUp");
+    expect(await focusedId()).toBe(order[0]);
+
+    // Move the (topmost) focused card to the bottom; focus follows it.
+    await page.keyboard.press("ControlOrMeta+Shift+ArrowDown");
+    await expect.poll(async () => (await columnOrder()).at(-1)).toBe(order[0]);
+    expect(await focusedId()).toBe(order[0]);
+  });
+
+  test("keyboard: jumping/moving to a column edge scrolls the card into view", async ({ page }) => {
+    await seedAuth(page, { enabledRepos: [REPO] });
+    // Enough cards that the column overflows and must scroll.
+    await mockGitHub(page, {
+      open: Array.from({ length: 20 }, (_, i) => ghItem(i + 1, `PR number ${i + 1}`)),
+    });
+
+    await page.goto("/", { waitUntil: "networkidle" });
+    await page.locator("h1").waitFor({ state: "visible" });
+    await expect(page.locator("[data-card-id]")).toHaveCount(20, { timeout: 5000 });
+
+    // scrollTop of the column that holds the focused card.
+    const scrollTop = () =>
+      page.evaluate(
+        () =>
+          (document.activeElement as HTMLElement | null)?.closest(".column-body")?.scrollTop ?? -1,
+      );
+    // The focused card sits within its column's visible scroll viewport.
+    const focusedInView = () =>
+      page.evaluate(() => {
+        const el = document.activeElement as HTMLElement | null;
+        const c = el?.closest(".column-body");
+        if (!el?.dataset.cardId || !c) return false;
+        const cr = c.getBoundingClientRect();
+        const r = el.getBoundingClientRect();
+        return r.top >= cr.top - 2 && r.bottom <= cr.bottom + 2;
+      });
+
+    // Focus the top card, jump to the bottom → column scrolls down and the card is visible.
+    await page.keyboard.press("ArrowDown");
+    await page.keyboard.press("ControlOrMeta+ArrowDown");
+    await expect.poll(scrollTop).toBeGreaterThan(0);
+    await expect.poll(focusedInView).toBe(true);
+    const bottom = await scrollTop();
+
+    // Jump back to the top → scrolls back up.
+    await page.keyboard.press("ControlOrMeta+ArrowUp");
+    await expect.poll(scrollTop).toBeLessThan(bottom);
+
+    // Moving the top card to the bottom scrolls the moved card into view.
+    await page.keyboard.press("ControlOrMeta+Shift+ArrowDown");
+    await expect.poll(scrollTop).toBeGreaterThan(0);
+    await expect.poll(focusedInView).toBe(true);
+  });
+
+  test("keyboard: moving a card to another column and back restores its position", async ({
+    page,
+  }) => {
+    await seedAuth(page, { enabledRepos: [REPO] });
+    await mockGitHub(page, {
+      open: [ghItem(1, "One PR"), ghItem(2, "Two PR"), ghItem(3, "Three PR")],
+    });
+
+    await page.goto("/", { waitUntil: "networkidle" });
+    await page.locator("h1").waitFor({ state: "visible" });
+    await expect(page.getByText("Three PR")).toBeVisible({ timeout: 5000 });
+
+    const focusedId = () =>
+      page.evaluate(() => document.activeElement?.getAttribute("data-card-id") ?? null);
+    const orderOf = (name: string) =>
+      page
+        .getByRole("region", { name })
+        .locator("[data-card-id]")
+        .evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.cardId ?? null));
+
+    const inboxBefore = await orderOf("📥 Inbox");
+    expect(inboxBefore.length).toBe(3);
+
+    // Focus the middle card.
+    await page.keyboard.press("ArrowDown");
+    await page.keyboard.press("ArrowDown");
+    const middle = await focusedId();
+    expect(middle).toBe(inboxBefore[1]);
+
+    // Move it to the next column, then straight back.
+    await page.keyboard.press("Shift+ArrowRight");
+    await expect.poll(() => orderOf("👀 Reviewing")).toContain(middle);
+    await page.keyboard.press("Shift+ArrowLeft");
+
+    // Inbox order is restored and the card keeps focus.
+    await expect.poll(() => orderOf("📥 Inbox")).toEqual(inboxBefore);
+    expect(await focusedId()).toBe(middle);
   });
 
   test("export excludes token, import restores board", async ({ page }) => {

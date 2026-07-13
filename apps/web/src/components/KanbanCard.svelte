@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { tick } from 'svelte';
 	import type { PRCard, Signal } from '@review365/api/types';
 	import { startCardDrag, endCardDrag } from '$lib/drag-state.svelte';
 
@@ -6,12 +7,16 @@
 		card,
 		onArchive,
 		onUnarchive,
-		onUpdateNote
+		onUpdateNote,
+		focused = false,
+		onSelect
 	}: {
 		card: PRCard;
 		onArchive?: (id: string) => void;
 		onUnarchive?: (id: string) => void;
 		onUpdateNote?: (cardId: string, note: string) => void;
+		focused?: boolean;
+		onSelect?: (id: string) => void;
 	} = $props();
 
 	let expanded = $state(false);
@@ -44,10 +49,31 @@
 		expanded = !expanded;
 	}
 
-	function startEditNote() {
+	async function startEditNote() {
 		if (!onUpdateNote) return;
 		editingNote = true;
 		noteDraft = card.note ?? '';
+		await tick();
+		noteInput?.focus();
+	}
+
+	// Keys that act on the focused card. Only the DOM-focused card receives these;
+	// arrow navigation is handled at the board level.
+	function handleCardKeydown(e: KeyboardEvent) {
+		if (editingNote || card.archived) return;
+		if (e.key === 'Enter') {
+			e.preventDefault();
+			e.stopPropagation();
+			window.open(card.url, '_blank', 'noopener');
+		} else if (e.key === ' ') {
+			e.preventDefault();
+			e.stopPropagation();
+			expanded = !expanded;
+		} else if ((e.key === 'n' || e.key === 'N') && onUpdateNote) {
+			e.preventDefault();
+			e.stopPropagation();
+			startEditNote();
+		}
 	}
 
 	function saveNote() {
@@ -89,13 +115,23 @@
 	);
 </script>
 
+<!-- Roving-tabindex focus target for keyboard board navigation; the card is
+	 deliberately programmatically focusable and key-driven. -->
+<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 <div
-	class="group relative block select-none rounded-lg border border-panel surface-panel p-3 transition-colors {ageBorder} {card.archived
+	data-card-id={card.id}
+	tabindex={-1}
+	class="group relative block select-none rounded-lg border border-panel surface-panel p-3 outline-none transition-colors {ageBorder} {card.archived
 		? 'opacity-50'
-		: 'cursor-grab hover:border-blue-500 hover:shadow-[0_0_0_1px_rgba(88,166,255,0.2)]'}"
+		: 'cursor-grab hover:border-blue-500 hover:shadow-[0_0_0_1px_rgba(88,166,255,0.2)]'} {focused
+		? 'ring-2 ring-blue-500'
+		: ''}"
 	draggable={!card.archived}
 	ondragstart={handleDragStart}
 	ondragend={handleDragEnd}
+	onkeydown={handleCardKeydown}
+	onclick={() => onSelect?.(card.id)}
 	role="listitem"
 >
 	<div class="mb-1 text-xs font-medium text-blue-500 dark:text-blue-400">{card.repo} <span class="text-blue-600 dark:text-blue-300">{card.platform === 'gitlab' ? '!' : '#'}{card.prNumber}</span></div>
