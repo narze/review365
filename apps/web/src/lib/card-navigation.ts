@@ -40,3 +40,19 @@ export function nextCardId(grid: string[][], currentId: string | null, dir: Dir)
   }
   return currentId;
 }
+
+// The first (top) or last (bottom) card of the column that holds currentId.
+// Returns null when currentId is absent, so the caller leaves focus untouched.
+export function columnEdgeId(
+  grid: string[][],
+  currentId: string | null,
+  edge: "top" | "bottom",
+): string | null {
+  if (!currentId) return null;
+  for (const col of grid) {
+    if (col.includes(currentId)) {
+      return edge === "top" ? col[0] : col[col.length - 1];
+    }
+  }
+  return null;
+}

@@ -8,7 +8,7 @@
 	import { SvelteMap } from 'svelte/reactivity';
 	import { tick } from 'svelte';
 	import { getTheme, setTheme, type Theme } from '$lib/theme';
-	import { nextCardId, type Dir } from '$lib/card-navigation';
+	import { nextCardId, columnEdgeId, type Dir } from '$lib/card-navigation';
 
 	let {
 		cards = [],
@@ -285,6 +285,33 @@
 		focusCard(id);
 	}
 
+	function focusColumnEdge(dir: 'up' | 'down') {
+		const id = columnEdgeId(nav.grid, focusedCardId, dir === 'up' ? 'top' : 'bottom');
+		if (id) focusCard(id);
+	}
+
+	// Reorder the focused card to the very top / bottom of its column.
+	async function moveFocusedCardToEdge(dir: 'up' | 'down') {
+		const pos = focusPos();
+		if (!pos || !focusedCardId) return;
+		const { col, row } = pos;
+		const columnId = nav.colIds[col];
+		if (columnId === '__orphaned__') return;
+		const mode = columnSorts.get(columnId);
+		if (mode && mode !== 'default') return;
+		const cardIds = nav.grid[col];
+		const id = focusedCardId;
+		if (dir === 'up') {
+			if (row === 0) return;
+			onReorderCard(id, cardIds[0], columnId);
+		} else {
+			if (row >= cardIds.length - 1) return;
+			onReorderCard(id, null, columnId);
+		}
+		await tick();
+		focusCard(id);
+	}
+
 	function handleKeydown(e: KeyboardEvent) {
 		if (isEditable(e.target)) return;
 
@@ -298,6 +325,18 @@
 
 		const dir = ARROW[e.key];
 		if (!dir) return;
+
+		// Ctrl/Cmd jumps to the column edge (Up/Down only, and only once a card is
+		// focused). Cmd+←/→ is left to the browser's history navigation.
+		if (e.metaKey || e.ctrlKey) {
+			if ((dir === 'up' || dir === 'down') && focusedCardId) {
+				e.preventDefault();
+				if (e.shiftKey) moveFocusedCardToEdge(dir);
+				else focusColumnEdge(dir);
+			}
+			return;
+		}
+
 		e.preventDefault();
 
 		if (e.shiftKey) {

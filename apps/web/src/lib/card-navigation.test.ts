@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { nextCardId } from "./card-navigation";
+import { columnEdgeId, nextCardId } from "./card-navigation";
 
 const grid = [["a1", "a2", "a3"], ["b1", "b2"], [], ["d1"]];
 
@@ -40,5 +40,23 @@ describe("nextCardId", () => {
   it("handles single-card and single-column grids", () => {
     expect(nextCardId([["only"]], "only", "down")).toBe("only");
     expect(nextCardId([["only"]], "only", "right")).toBe("only");
+  });
+});
+
+describe("columnEdgeId", () => {
+  it("returns the top and bottom card of the current column", () => {
+    expect(columnEdgeId(grid, "a2", "top")).toBe("a1");
+    expect(columnEdgeId(grid, "a2", "bottom")).toBe("a3");
+    expect(columnEdgeId(grid, "b1", "bottom")).toBe("b2");
+  });
+
+  it("returns the card itself when already at that edge", () => {
+    expect(columnEdgeId(grid, "a1", "top")).toBe("a1");
+    expect(columnEdgeId(grid, "d1", "bottom")).toBe("d1"); // single-card column
+  });
+
+  it("returns null for no current card or an unknown id", () => {
+    expect(columnEdgeId(grid, null, "top")).toBeNull();
+    expect(columnEdgeId(grid, "ghost", "bottom")).toBeNull();
   });
 });

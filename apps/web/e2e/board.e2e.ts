@@ -46,7 +46,7 @@ async function mockGitHub(page: Page, opts: { open?: GHItem[]; merged?: GHItem[]
     }
     if (url.pathname === "/search/issues") {
       const q = url.searchParams.get("q") ?? "";
-      const items = q.includes("is:merged") ? opts.merged ?? [] : [];
+      const items = q.includes("is:merged") ? (opts.merged ?? []) : [];
       await route.fulfill({ json: { total_count: items.length, items } });
       return;
     }
@@ -329,6 +329,40 @@ test.describe("Review365", () => {
     await page.keyboard.press("ArrowDown");
     await expect(noteInput).toBeFocused();
     expect(await focusedId()).toBeNull();
+  });
+
+  test("keyboard: Ctrl/Cmd+Up/Down jump to and move cards to column edges", async ({ page }) => {
+    await seedAuth(page, { enabledRepos: [REPO] });
+    await mockGitHub(page, {
+      open: [ghItem(1, "Alpha PR"), ghItem(2, "Beta PR"), ghItem(3, "Gamma PR")],
+    });
+
+    await page.goto("/", { waitUntil: "networkidle" });
+    await page.locator("h1").waitFor({ state: "visible" });
+    await expect(page.getByText("Gamma PR")).toBeVisible({ timeout: 5000 });
+
+    const focusedId = () =>
+      page.evaluate(() => document.activeElement?.getAttribute("data-card-id") ?? null);
+    const columnOrder = () =>
+      page
+        .getByRole("region", { name: "📥 Inbox" })
+        .locator("[data-card-id]")
+        .evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.cardId ?? null));
+
+    await page.keyboard.press("ArrowDown");
+    const order = await columnOrder();
+    expect(order.length).toBe(3);
+
+    // Jump to the bottom, then back to the top.
+    await page.keyboard.press("ControlOrMeta+ArrowDown");
+    expect(await focusedId()).toBe(order[2]);
+    await page.keyboard.press("ControlOrMeta+ArrowUp");
+    expect(await focusedId()).toBe(order[0]);
+
+    // Move the (topmost) focused card to the bottom; focus follows it.
+    await page.keyboard.press("ControlOrMeta+Shift+ArrowDown");
+    await expect.poll(async () => (await columnOrder()).at(-1)).toBe(order[0]);
+    expect(await focusedId()).toBe(order[0]);
   });
 
   test("export excludes token, import restores board", async ({ page }) => {

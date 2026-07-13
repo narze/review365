@@ -23,15 +23,22 @@ vertical column scroll).
 
 ### Card actions (focused card only)
 
-| Key        | Action                                   |
-| ---------- | ---------------------------------------- |
-| `Enter`    | Open the PR/MR url in a new tab          |
-| `Space`    | Toggle the title clamp/expand            |
-| `N`        | Start editing the card note              |
-| `Shift+↑`  | Move card up one position in its column  |
-| `Shift+↓`  | Move card down one position in its column|
-| `Shift+←`  | Move card to the previous column         |
-| `Shift+→`  | Move card to the next column             |
+| Key                | Action                                          |
+| ------------------ | ----------------------------------------------- |
+| `Enter`            | Open the PR/MR url in a new tab                 |
+| `Space`            | Toggle the title clamp/expand                   |
+| `N`                | Start editing the card note                     |
+| `Shift+↑`          | Move card up one position in its column         |
+| `Shift+↓`          | Move card down one position in its column       |
+| `Shift+←`          | Move card to the previous column                |
+| `Shift+→`          | Move card to the next column                    |
+| `Ctrl/Cmd+↑`       | Focus the topmost card of the current column    |
+| `Ctrl/Cmd+↓`       | Focus the bottommost card of the current column |
+| `Ctrl/Cmd+Shift+↑` | Move card to the top of its column              |
+| `Ctrl/Cmd+Shift+↓` | Move card to the bottom of its column           |
+
+`Ctrl/Cmd` acts on the vertical axis only; `Ctrl/Cmd+←/→` is left to the
+browser. The jump keys act only when a card is already focused.
 
 After a `Shift+Arrow` move the same card keeps focus and scrolls into view.
 
@@ -50,7 +57,7 @@ Three units with clear boundaries.
 Grid math, unit-testable in isolation.
 
 ```ts
-type Dir = 'up' | 'down' | 'left' | 'right';
+type Dir = "up" | "down" | "left" | "right";
 
 // grid: columns of visible card ids, in visual order.
 // currentId: the focused card, or null for entry.
