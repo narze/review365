@@ -2,6 +2,14 @@ export type ColumnId = string;
 
 export type Platform = "github" | "gitlab";
 
+export type CIState = "success" | "failure" | "pending";
+
+export interface CIStatus {
+  state: CIState;
+  total: number;
+  failing?: string[];
+}
+
 export type Signal =
   | "pr-open"
   | "review-requested"
@@ -45,6 +53,7 @@ export interface PRCard {
   archived: boolean;
   order: number;
   note?: string;
+  ciStatus?: CIStatus;
 }
 
 export interface BoardState {

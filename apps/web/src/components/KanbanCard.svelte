@@ -158,6 +158,16 @@
 			{/each}
 		</div>
 	{/if}
+	{#if card.ciStatus}
+		{@const ciBadge = {
+			success: { label: `✓ ${card.ciStatus.total} checks`, cls: 'bg-green-100 text-green-800 dark:bg-green-900/60 dark:text-green-300' },
+			failure: { label: `✕ ${card.ciStatus.failing?.join(', ') ?? 'checks failed'}`, cls: 'bg-red-100 text-red-800 dark:bg-red-900/60 dark:text-red-300' },
+			pending: { label: `◌ ${card.ciStatus.total} checks`, cls: 'bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-300' }
+		}[card.ciStatus.state]}
+		<span class="mb-1.5 inline-flex rounded px-1.5 py-0.5 text-[10px] leading-none {ciBadge.cls}" title="CI checks">
+			{ciBadge.label}
+		</span>
+	{/if}
 	{#if onUpdateNote}
 		{#if editingNote}
 			<input

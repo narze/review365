@@ -1,4 +1,4 @@
-import type { PRCard, Signal } from "../types";
+import type { CIStatus, PRCard, Signal } from "../types";
 import type { ProviderContext, ReviewProvider } from "./types";
 import { mapWithConcurrency } from "./concurrency";
 
@@ -12,6 +12,17 @@ interface GHPullListItem {
   user: { login: string } | null;
   draft: boolean;
   requested_reviewers?: { login: string }[] | null;
+  head?: { sha: string } | null;
+}
+
+interface GHCheckRun {
+  name: string;
+  status: string;
+  conclusion: string | null;
+}
+
+interface GHCheckRunsResponse {
+  check_runs: GHCheckRun[];
 }
 
 interface GHSearchItem {
@@ -82,7 +93,13 @@ function prKey(repo: string, number: number): string {
 
 function toPRCard(
   repo: string,
-  pr: { number: number; title: string; html_url: string; updated_at: string; user: { login: string } | null },
+  pr: {
+    number: number;
+    title: string;
+    html_url: string;
+    updated_at: string;
+    user: { login: string } | null;
+  },
   isOwnPR: boolean,
   signals: Signal[] = [],
 ): PRCard {
@@ -145,7 +162,36 @@ async function fetchOpenPRs(token: string, repo: string): Promise<GHPullListItem
   return ghFetch<GHPullListItem[]>(token, `/repos/${repo}/pulls?state=open&per_page=100`);
 }
 
-async function fetchMergedPRs(token: string, repo: string, cutoff: string): Promise<GHSearchItem[]> {
+async function fetchCIStatus(
+  token: string,
+  repo: string,
+  sha: string,
+): Promise<CIStatus | undefined> {
+  const { check_runs: checks } = await ghFetch<GHCheckRunsResponse>(
+    token,
+    `/repos/${repo}/commits/${sha}/check-runs?filter=latest&per_page=100`,
+  );
+  if (checks.length === 0) return undefined;
+
+  const failing = checks
+    .filter((check) =>
+      ["failure", "timed_out", "cancelled", "action_required", "startup_failure"].includes(
+        check.conclusion ?? "",
+      ),
+    )
+    .map((check) => check.name);
+  const pending = checks.some((check) => check.status !== "completed" || check.conclusion === null);
+
+  if (failing.length > 0) return { state: "failure", total: checks.length, failing };
+  if (pending) return { state: "pending", total: checks.length };
+  return { state: "success", total: checks.length };
+}
+
+async function fetchMergedPRs(
+  token: string,
+  repo: string,
+  cutoff: string,
+): Promise<GHSearchItem[]> {
   const query = `is:pr is:merged repo:${repo} merged:>=${cutoff}`;
   const res = await ghFetch<GHSearchResponse>(
     token,
@@ -180,7 +226,7 @@ async function fetchPRs(
     return [];
   }
 
-  const cardMap = new Map<string, PRCard & { signals: Signal[] }>();
+  const cardMap = new Map<string, PRCard & { signals: Signal[]; headSha?: string }>();
   const cutoff = new Date(Date.now() - mergedRetentionDays * 86400000).toISOString().split("T")[0];
 
   // One repo's fetch doesn't wait on another's: run the whole watchlist concurrently.
@@ -197,7 +243,11 @@ async function fetchPRs(
       const signals: Signal[] = ["pr-open"];
       if (isOwnPR) signals.push("own-pr");
       if (pr.requested_reviewers?.some((r) => r.login === user)) signals.push("review-requested");
-      cardMap.set(prKey(repo, pr.number), { ...toPRCard(repo, pr, isOwnPR), signals });
+      cardMap.set(prKey(repo, pr.number), {
+        ...toPRCard(repo, pr, isOwnPR),
+        signals,
+        headSha: pr.head?.sha,
+      });
     }
 
     // 2. Recently merged PRs (any author, within configured retention)
@@ -216,6 +266,7 @@ async function fetchPRs(
   });
 
   await enrichWithReviewSignals(token, cardMap, user);
+  for (const card of cardMap.values()) delete card.headSha;
 
   const prs = [...cardMap.values()];
   prsCache = { key: cacheKey, prs, ts: Date.now() };
@@ -224,7 +275,7 @@ async function fetchPRs(
 
 async function enrichWithReviewSignals(
   token: string,
-  cardMap: Map<string, PRCard & { signals: Signal[] }>,
+  cardMap: Map<string, PRCard & { signals: Signal[]; headSha?: string }>,
   user: string,
 ) {
   const watchlisted = [...cardMap.values()].filter((c) => !c.signals.includes("merged"));
@@ -260,6 +311,15 @@ async function enrichWithReviewSignals(
       }
     } catch {
       // PR may be from a repo we can't access reviews for
+    }
+
+    if (card.headSha) {
+      try {
+        const ciStatus = await fetchCIStatus(token, card.repo, card.headSha);
+        if (ciStatus) card.ciStatus = ciStatus;
+      } catch {
+        // PR may be from a repo we can't access checks for
+      }
     }
   });
 }
