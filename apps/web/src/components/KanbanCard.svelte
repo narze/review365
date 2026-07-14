@@ -2,6 +2,7 @@
 	import { tick } from 'svelte';
 	import type { PRCard, Signal } from '@review365/api/types';
 	import { startCardDrag, endCardDrag } from '$lib/drag-state.svelte';
+	import { groupChecks } from '$lib/ci-checks';
 
 	let {
 		card,
@@ -9,7 +10,11 @@
 		onUnarchive,
 		onUpdateNote,
 		focused = false,
-		onSelect
+		onSelect,
+		ciDetailsOpen = false,
+		onOpenCIPopover,
+		onScheduleCIPopoverClose,
+		onCloseCIPopover
 	}: {
 		card: PRCard;
 		onArchive?: (id: string) => void;
@@ -17,9 +22,14 @@
 		onUpdateNote?: (cardId: string, note: string) => void;
 		focused?: boolean;
 		onSelect?: (id: string) => void;
+		ciDetailsOpen?: boolean;
+		onOpenCIPopover?: (card: PRCard, anchor: DOMRect) => void;
+		onScheduleCIPopoverClose?: () => void;
+		onCloseCIPopover?: () => void;
 	} = $props();
 
 	let expanded = $state(false);
+	let ciButton = $state<HTMLButtonElement>();
 	let didDrag = false;
 	let editingNote = $state(false);
 	let noteDraft = $state('');
@@ -47,6 +57,10 @@
 	function handleTitleClick() {
 		if (didDrag) return;
 		expanded = !expanded;
+	}
+
+	function openCIPopover() {
+		if (ciButton) onOpenCIPopover?.(card, ciButton.getBoundingClientRect());
 	}
 
 	async function startEditNote() {
@@ -134,7 +148,42 @@
 	onclick={() => onSelect?.(card.id)}
 	role="listitem"
 >
-	<div class="mb-1 text-xs font-medium text-blue-500 dark:text-blue-400">{card.repo} <span class="text-blue-600 dark:text-blue-300">{card.platform === 'gitlab' ? '!' : '#'}{card.prNumber}</span></div>
+	<div class="mb-1 flex items-center text-xs font-medium text-blue-500 dark:text-blue-400">
+		{card.repo}
+		<span class="ml-1 text-blue-600 dark:text-blue-300">{card.platform === 'gitlab' ? '!' : '#'}{card.prNumber}</span>
+		{#if card.ciStatus}
+			{@const checkGroups = groupChecks(card.ciStatus.checks ?? [])}
+			{@const failedCount = checkGroups.failedCount}
+			{@const pendingCount = checkGroups.pendingCount}
+			{@const ciIcon = {
+				success: { symbol: '✓', cls: 'text-green-600 dark:text-green-400', label: 'Checks passed' },
+				failure: { symbol: '✕', cls: 'text-red-600 dark:text-red-400', label: `${failedCount} checks failed` },
+				pending: { symbol: '◌', cls: 'text-amber-600 dark:text-amber-400', label: 'Checks running' }
+			}[card.ciStatus.state]}
+			<div class="relative ml-1 inline-flex">
+				<button
+					bind:this={ciButton}
+					type="button"
+					class="inline-flex h-4 min-w-4 items-center justify-center rounded px-0.5 text-xs font-bold {ciIcon.cls} hover:surface-raised focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
+					title={ciIcon.label}
+					aria-label={ciIcon.label}
+					aria-expanded={ciDetailsOpen}
+					onmouseenter={openCIPopover}
+					onmouseleave={onScheduleCIPopoverClose}
+					onclick={(event) => {
+						event.stopPropagation();
+						if (ciDetailsOpen) onCloseCIPopover?.();
+						else openCIPopover();
+					}}
+				>
+					{ciIcon.symbol}
+					{#if card.ciStatus.state === 'failure'}
+						<span class="font-normal ml-0.5">({failedCount})</span>
+					{/if}
+				</button>
+			</div>
+		{/if}
+	</div>
 	<div
 		class="mb-1.5 text-sm text-heading {expanded ? '' : 'line-clamp-2'} cursor-pointer"
 		role="button"

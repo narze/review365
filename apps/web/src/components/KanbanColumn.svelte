@@ -30,7 +30,11 @@
 		onSort = () => {},
 		width = 300,
 		focusedCardId = null,
-		onSelectCard
+		onSelectCard,
+		ciPopoverCardId = null,
+		onOpenCIPopover,
+		onScheduleCIPopoverClose,
+		onCloseCIPopover
 	}: {
 		col: ColumnDef;
 		cards: PRCard[];
@@ -47,6 +51,10 @@
 		width?: number;
 		focusedCardId?: string | null;
 		onSelectCard?: (id: string) => void;
+		ciPopoverCardId?: string | null;
+		onOpenCIPopover?: (card: PRCard, anchor: DOMRect) => void;
+		onScheduleCIPopoverClose?: () => void;
+		onCloseCIPopover?: () => void;
 	} = $props();
 
 	let isOver = $state(false);
@@ -235,6 +243,10 @@
 						{onUpdateNote}
 						focused={card.id === focusedCardId}
 						onSelect={onSelectCard}
+						ciDetailsOpen={card.id === ciPopoverCardId}
+						{onOpenCIPopover}
+						{onScheduleCIPopoverClose}
+						{onCloseCIPopover}
 					/>
 				</div>
 				{#if dropTargetId === card.id && !dropAbove && card.id !== cardDrag.cardId}

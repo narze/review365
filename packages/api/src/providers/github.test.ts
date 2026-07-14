@@ -97,3 +97,47 @@ describe("github fetchOwnedRepos", () => {
     expect(repos).toEqual(["alice/visible"]);
   });
 });
+
+describe("github fetchPRs", () => {
+  it("includes a compact CI status from the PR head commit's check runs", async () => {
+    mockFetch([
+      {
+        match: "/repos/acme/widgets/pulls?state=open",
+        body: [
+          {
+            number: 42,
+            title: "Ship checks",
+            html_url: "https://github.com/acme/widgets/pull/42",
+            updated_at: "2026-07-14T00:00:00Z",
+            user: { login: "bob" },
+            draft: false,
+            head: { sha: "abc123" },
+          },
+        ],
+      },
+      { match: "/search/issues", body: { items: [] } },
+      { match: "/repos/acme/widgets/pulls/42/reviews", body: [] },
+      {
+        match: "/repos/acme/widgets/commits/abc123/check-runs",
+        body: {
+          check_runs: [
+            { name: "unit", status: "completed", conclusion: "success" },
+            { name: "lint", status: "completed", conclusion: "failure" },
+          ],
+        },
+      },
+    ]);
+
+    const [pr] = await githubProvider.fetchPRs(ctx(), ["acme/widgets"], true);
+
+    expect(pr.ciStatus).toEqual({
+      state: "failure",
+      total: 2,
+      failing: ["lint"],
+      checks: [
+        { name: "unit", state: "success" },
+        { name: "lint", state: "failure" },
+      ],
+    });
+  });
+});

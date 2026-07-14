@@ -10,6 +10,13 @@ interface GHItem {
   user: { login: string };
   draft: boolean;
   requested_reviewers?: { login: string }[];
+  head: { sha: string };
+}
+
+interface GHCheckRun {
+  name: string;
+  status: string;
+  conclusion: string | null;
 }
 
 function ghItem(
@@ -25,6 +32,7 @@ function ghItem(
     user: { login: opts.author ?? "someone" },
     draft: opts.draft ?? false,
     requested_reviewers: opts.reviewer ? [{ login: opts.reviewer }] : [],
+    head: { sha: `sha-${n}` },
   };
 }
 
@@ -36,7 +44,10 @@ async function seedAuth(page: Page, opts: { enabledRepos?: string[] } = {}) {
   }, opts.enabledRepos ?? []);
 }
 
-async function mockGitHub(page: Page, opts: { open?: GHItem[]; merged?: GHItem[] } = {}) {
+async function mockGitHub(
+  page: Page,
+  opts: { open?: GHItem[]; merged?: GHItem[]; checkRuns?: GHCheckRun[] } = {},
+) {
   await page.route("https://api.github.com/**", async (route) => {
     const url = new URL(route.request().url());
 
@@ -52,6 +63,10 @@ async function mockGitHub(page: Page, opts: { open?: GHItem[]; merged?: GHItem[]
     }
     if (/^\/repos\/.+\/pulls\/\d+\/reviews$/.test(url.pathname)) {
       await route.fulfill({ json: [] });
+      return;
+    }
+    if (/^\/repos\/.+\/commits\/.+\/check-runs$/.test(url.pathname)) {
+      await route.fulfill({ json: { check_runs: opts.checkRuns ?? [] } });
       return;
     }
     if (url.pathname === "/user/repos") {
@@ -77,6 +92,25 @@ async function mockGitHub(page: Page, opts: { open?: GHItem[]; merged?: GHItem[]
 }
 
 test.describe("Review365", () => {
+  test("CI panel: closes after the pointer leaves the panel", async ({ page }) => {
+    await seedAuth(page, { enabledRepos: [REPO] });
+    await mockGitHub(page, {
+      open: [ghItem(1, "Check panel")],
+      checkRuns: [{ name: "lint", status: "completed", conclusion: "failure" }],
+    });
+
+    await page.goto("/", { waitUntil: "networkidle" });
+    const ciButton = page.getByRole("button", { name: "1 checks failed" });
+    await expect(ciButton).toBeVisible({ timeout: 5000 });
+
+    await ciButton.hover();
+    const panel = page.getByRole("dialog", { name: "CI checks" });
+    await expect(panel).toBeVisible();
+    await panel.hover();
+    await page.mouse.move(0, 0);
+    await expect(panel).toBeHidden();
+  });
+
   test("onboarding: gate shows without token, connecting reveals board", async ({ page }) => {
     await mockGitHub(page);
     await page.goto("/");

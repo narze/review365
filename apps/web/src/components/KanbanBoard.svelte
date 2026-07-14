@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { PRCard, ColumnId, ColumnDef, Platform } from '@review365/api/types';
 	import KanbanColumn from './KanbanColumn.svelte';
+	import CIChecksPopover from './CIChecksPopover.svelte';
 	import RepoFilter from './RepoFilter.svelte';
 	import ColumnManager from './ColumnManager.svelte';
 	import RuleManager from './RuleManager.svelte';
@@ -78,6 +79,27 @@
 	let theme = $state<Theme>(getTheme());
 	let showArchived = $state(false);
 	let refreshing = $state(false);
+	let ciPopover = $state<{ card: PRCard; anchor: DOMRect } | null>(null);
+	let ciCloseTimer: ReturnType<typeof setTimeout> | undefined;
+
+	function openCIPopover(card: PRCard, anchor: DOMRect) {
+		if (ciCloseTimer) clearTimeout(ciCloseTimer);
+		ciPopover = { card, anchor };
+	}
+
+	function scheduleCIPopoverClose() {
+		if (ciCloseTimer) clearTimeout(ciCloseTimer);
+		ciCloseTimer = setTimeout(() => (ciPopover = null), 100);
+	}
+
+	function cancelCIPopoverClose() {
+		if (ciCloseTimer) clearTimeout(ciCloseTimer);
+	}
+
+	function closeCIPopover() {
+		cancelCIPopoverClose();
+		ciPopover = null;
+	}
 	let dragColId: string | null = $state(null);
 	let dropColTarget: string | null = $state(null);
 	let dropColBefore: boolean = $state(false);
@@ -548,6 +570,10 @@
 					onSort={(mode) => onSortColumn(col.id, mode as SortMode)}
 					{focusedCardId}
 					{onSelectCard}
+					ciPopoverCardId={ciPopover?.card.id}
+					onOpenCIPopover={openCIPopover}
+					onScheduleCIPopoverClose={scheduleCIPopoverClose}
+					onCloseCIPopover={closeCIPopover}
 				/>
 			</div>
 		{/each}
@@ -564,8 +590,21 @@
 				{showArchived}
 				{focusedCardId}
 				{onSelectCard}
+				ciPopoverCardId={ciPopover?.card.id}
+				onOpenCIPopover={openCIPopover}
+				onScheduleCIPopoverClose={scheduleCIPopoverClose}
+				onCloseCIPopover={closeCIPopover}
 			/>
 {/if}
 </div>
+
+{#if ciPopover}
+	<CIChecksPopover
+		card={ciPopover.card}
+		anchor={ciPopover.anchor}
+		onEnter={cancelCIPopoverClose}
+		onLeave={scheduleCIPopoverClose}
+	/>
+{/if}
 
 {/if}
