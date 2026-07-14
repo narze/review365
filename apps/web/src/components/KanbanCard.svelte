@@ -3,7 +3,6 @@
 	import type { PRCard, Signal } from '@review365/api/types';
 	import { startCardDrag, endCardDrag } from '$lib/drag-state.svelte';
 	import { groupChecks } from '$lib/ci-checks';
-	import { portal } from '$lib/portal';
 
 	let {
 		card,
@@ -11,7 +10,11 @@
 		onUnarchive,
 		onUpdateNote,
 		focused = false,
-		onSelect
+		onSelect,
+		ciDetailsOpen = false,
+		onOpenCIPopover,
+		onScheduleCIPopoverClose,
+		onCloseCIPopover
 	}: {
 		card: PRCard;
 		onArchive?: (id: string) => void;
@@ -19,14 +22,14 @@
 		onUpdateNote?: (cardId: string, note: string) => void;
 		focused?: boolean;
 		onSelect?: (id: string) => void;
+		ciDetailsOpen?: boolean;
+		onOpenCIPopover?: (card: PRCard, anchor: DOMRect) => void;
+		onScheduleCIPopoverClose?: () => void;
+		onCloseCIPopover?: () => void;
 	} = $props();
 
 	let expanded = $state(false);
-	let ciDetailsOpen = $state(false);
 	let ciButton = $state<HTMLButtonElement>();
-	let ciCloseTimer: ReturnType<typeof setTimeout> | undefined;
-	let ciPopoverPosition = $state({ left: 0, top: 0 });
-	let showAllPassedChecks = $state(false);
 	let didDrag = false;
 	let editingNote = $state(false);
 	let noteDraft = $state('');
@@ -56,23 +59,8 @@
 		expanded = !expanded;
 	}
 
-	function positionCIPopover() {
-		if (!ciDetailsOpen || !ciButton) return;
-		const rect = ciButton.getBoundingClientRect();
-		ciPopoverPosition = {
-			left: Math.max(8, Math.min(rect.left, window.innerWidth - 272)),
-			top: rect.bottom + 4
-		};
-	}
-
 	function openCIPopover() {
-		if (ciCloseTimer) clearTimeout(ciCloseTimer);
-		ciDetailsOpen = true;
-		positionCIPopover();
-	}
-
-	function scheduleCIPopoverClose() {
-		ciCloseTimer = setTimeout(() => (ciDetailsOpen = false), 100);
+		if (ciButton) onOpenCIPopover?.(card, ciButton.getBoundingClientRect());
 	}
 
 	async function startEditNote() {
@@ -141,8 +129,6 @@
 	);
 </script>
 
-<svelte:window onresize={positionCIPopover} />
-
 <!-- Roving-tabindex focus target for keyboard board navigation; the card is
 	 deliberately programmatically focusable and key-driven. -->
 <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
@@ -183,10 +169,10 @@
 					aria-label={ciIcon.label}
 					aria-expanded={ciDetailsOpen}
 					onmouseenter={openCIPopover}
-					onmouseleave={scheduleCIPopoverClose}
+					onmouseleave={onScheduleCIPopoverClose}
 					onclick={(event) => {
 						event.stopPropagation();
-						if (ciDetailsOpen) ciDetailsOpen = false;
+						if (ciDetailsOpen) onCloseCIPopover?.();
 						else openCIPopover();
 					}}
 				>
@@ -196,73 +182,6 @@
 					{/if}
 				</button>
 			</div>
-			{#if ciDetailsOpen}
-				<div
-					use:portal
-					class="fixed z-50 w-64 rounded-md border border-panel surface-raised text-xs shadow-lg"
-					style={`left: ${ciPopoverPosition.left}px; top: ${ciPopoverPosition.top}px;`}
-					role="dialog"
-					tabindex="-1"
-					aria-label="CI checks"
-					onmouseenter={openCIPopover}
-					onmouseleave={() => (ciDetailsOpen = false)}
-				>
-					<div class="sticky top-0 flex items-center justify-between border-b border-panel surface-raised px-2 py-1.5">
-						<span class="font-medium text-heading">CI checks</span>
-						<span class="text-muted">
-							{#if failedCount > 0}{failedCount} failed{/if}{#if failedCount > 0 && pendingCount > 0} · {/if}{#if pendingCount > 0}{pendingCount} running{/if}{#if failedCount === 0 && pendingCount === 0}{checkGroups.passed.length} passed{/if}
-						</span>
-					</div>
-					<div class="max-h-72 overflow-y-auto p-2">
-						{#each checkGroups.attention as check}
-							{@const checkIcon = check.state === 'failure' ? '✕' : '◌'}
-							<div class="flex items-center gap-1.5 py-0.5 text-body">
-								<span class={check.state === 'failure' ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'}>{checkIcon}</span>
-								<span class="truncate">{check.name}</span>
-							</div>
-						{/each}
-						{#each showAllPassedChecks ? checkGroups.passed : checkGroups.visiblePassed as check}
-							{@const checkIcon = check.state === 'success' ? '✓' : check.state === 'failure' ? '✕' : '◌'}
-							<div class="flex items-center gap-1.5 py-0.5 text-body">
-							<span class={check.state === 'success' ? 'text-green-600 dark:text-green-400' : check.state === 'failure' ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'}>{checkIcon}</span>
-							<span class="truncate">{check.name}</span>
-							</div>
-						{/each}
-						{#if !showAllPassedChecks && checkGroups.hiddenPassedCount > 0}
-							<button
-								type="button"
-								class="mt-1 text-blue-500 hover:underline"
-								onclick={(event) => {
-									event.stopPropagation();
-									showAllPassedChecks = true;
-								}}
-							>
-								Show {checkGroups.hiddenPassedCount} more passed checks
-							</button>
-						{:else if showAllPassedChecks && checkGroups.hiddenPassedCount > 0}
-							<button
-								type="button"
-								class="mt-1 text-blue-500 hover:underline"
-								onclick={(event) => {
-									event.stopPropagation();
-									showAllPassedChecks = false;
-								}}
-							>
-								Show fewer checks
-							</button>
-						{/if}
-						<a
-							href={`${card.url}/checks`}
-							target="_blank"
-							rel="noreferrer"
-							class="mt-2 block text-blue-500 hover:underline"
-							onclick={(event) => event.stopPropagation()}
-						>
-							Open checks on GitHub ↗
-						</a>
-					</div>
-				</div>
-			{/if}
 		{/if}
 	</div>
 	<div
