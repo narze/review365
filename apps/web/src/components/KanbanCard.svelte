@@ -205,7 +205,7 @@
 					tabindex="-1"
 					aria-label="CI checks"
 					onmouseenter={openCIPopover}
-					onmouseleave={scheduleCIPopoverClose}
+					onmouseleave={() => (ciDetailsOpen = false)}
 				>
 					<div class="sticky top-0 flex items-center justify-between border-b border-panel surface-raised px-2 py-1.5">
 						<span class="font-medium text-heading">CI checks</span>
