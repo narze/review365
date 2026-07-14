@@ -2,6 +2,7 @@
 	import { tick } from 'svelte';
 	import type { PRCard, Signal } from '@review365/api/types';
 	import { startCardDrag, endCardDrag } from '$lib/drag-state.svelte';
+	import { groupChecks } from '$lib/ci-checks';
 
 	let {
 		card,
@@ -21,6 +22,7 @@
 
 	let expanded = $state(false);
 	let ciDetailsOpen = $state(false);
+	let showAllPassedChecks = $state(false);
 	let didDrag = false;
 	let editingNote = $state(false);
 	let noteDraft = $state('');
@@ -144,6 +146,9 @@
 				failure: { symbol: '✕', cls: 'text-red-600 dark:text-red-400', label: 'Checks failed' },
 				pending: { symbol: '◌', cls: 'text-amber-600 dark:text-amber-400', label: 'Checks running' }
 			}[card.ciStatus.state]}
+			{@const checkGroups = groupChecks(card.ciStatus.checks ?? [])}
+			{@const failedCount = checkGroups.attention.filter((check) => check.state === 'failure').length}
+			{@const pendingCount = checkGroups.attention.filter((check) => check.state === 'pending').length}
 			<div class="group/ci relative ml-1 inline-flex">
 				<button
 					type="button"
@@ -159,18 +164,65 @@
 					{ciIcon.symbol}
 				</button>
 				<div
-					class="absolute left-0 top-full z-30 mt-1 hidden w-56 rounded-md border border-panel surface-raised p-2 text-xs shadow-lg group-hover/ci:block {ciDetailsOpen ? '!block' : ''}"
-					role="tooltip"
+					class="absolute left-0 top-full z-30 mt-1 hidden w-64 rounded-md border border-panel surface-raised text-xs shadow-lg group-hover/ci:block {ciDetailsOpen ? '!block' : ''}"
+					role="dialog"
+					aria-label="CI checks"
 				>
-					<div class="mb-1 font-medium text-heading">CI checks</div>
-					{#each card.ciStatus.checks ?? [] as check}
-						{@const checkIcon = check.state === 'success' ? '✓' : check.state === 'failure' ? '✕' : '◌'}
-						<div class="flex items-center gap-1.5 py-0.5 text-body">
+					<div class="sticky top-0 flex items-center justify-between border-b border-panel surface-raised px-2 py-1.5">
+						<span class="font-medium text-heading">CI checks</span>
+						<span class="text-muted">
+							{#if failedCount > 0}{failedCount} failed{/if}{#if failedCount > 0 && pendingCount > 0} · {/if}{#if pendingCount > 0}{pendingCount} running{/if}{#if failedCount === 0 && pendingCount === 0}{checkGroups.passed.length} passed{/if}
+						</span>
+					</div>
+					<div class="max-h-72 overflow-y-auto p-2">
+						{#each checkGroups.attention as check}
+							{@const checkIcon = check.state === 'failure' ? '✕' : '◌'}
+							<div class="flex items-center gap-1.5 py-0.5 text-body">
+								<span class={check.state === 'failure' ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'}>{checkIcon}</span>
+								<span class="truncate">{check.name}</span>
+							</div>
+						{/each}
+						{#each showAllPassedChecks ? checkGroups.passed : checkGroups.visiblePassed as check}
+							{@const checkIcon = check.state === 'success' ? '✓' : check.state === 'failure' ? '✕' : '◌'}
+							<div class="flex items-center gap-1.5 py-0.5 text-body">
 							<span class={check.state === 'success' ? 'text-green-600 dark:text-green-400' : check.state === 'failure' ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'}>{checkIcon}</span>
 							<span class="truncate">{check.name}</span>
-						</div>
-					{/each}
-				</div>
+							</div>
+						{/each}
+						{#if !showAllPassedChecks && checkGroups.hiddenPassedCount > 0}
+							<button
+								type="button"
+								class="mt-1 text-blue-500 hover:underline"
+								onclick={(event) => {
+									event.stopPropagation();
+									showAllPassedChecks = true;
+								}}
+							>
+								Show {checkGroups.hiddenPassedCount} more passed checks
+							</button>
+						{:else if showAllPassedChecks && checkGroups.hiddenPassedCount > 0}
+							<button
+								type="button"
+								class="mt-1 text-blue-500 hover:underline"
+								onclick={(event) => {
+									event.stopPropagation();
+									showAllPassedChecks = false;
+								}}
+							>
+								Show fewer checks
+							</button>
+						{/if}
+						<a
+							href={`${card.url}/checks`}
+							target="_blank"
+							rel="noreferrer"
+							class="mt-2 block text-blue-500 hover:underline"
+							onclick={(event) => event.stopPropagation()}
+						>
+							Open checks on GitHub ↗
+						</a>
+					</div>
+					</div>
 			</div>
 		{/if}
 	</div>
