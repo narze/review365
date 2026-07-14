@@ -20,6 +20,7 @@
 	} = $props();
 
 	let expanded = $state(false);
+	let ciDetailsOpen = $state(false);
 	let didDrag = false;
 	let editingNote = $state(false);
 	let noteDraft = $state('');
@@ -134,7 +135,45 @@
 	onclick={() => onSelect?.(card.id)}
 	role="listitem"
 >
-	<div class="mb-1 text-xs font-medium text-blue-500 dark:text-blue-400">{card.repo} <span class="text-blue-600 dark:text-blue-300">{card.platform === 'gitlab' ? '!' : '#'}{card.prNumber}</span></div>
+	<div class="mb-1 flex items-center text-xs font-medium text-blue-500 dark:text-blue-400">
+		{card.repo}
+		<span class="ml-1 text-blue-600 dark:text-blue-300">{card.platform === 'gitlab' ? '!' : '#'}{card.prNumber}</span>
+		{#if card.ciStatus}
+			{@const ciIcon = {
+				success: { symbol: '✓', cls: 'text-green-600 dark:text-green-400', label: 'Checks passed' },
+				failure: { symbol: '✕', cls: 'text-red-600 dark:text-red-400', label: 'Checks failed' },
+				pending: { symbol: '◌', cls: 'text-amber-600 dark:text-amber-400', label: 'Checks running' }
+			}[card.ciStatus.state]}
+			<div class="group/ci relative ml-1 inline-flex">
+				<button
+					type="button"
+					class="inline-flex size-4 items-center justify-center rounded text-xs font-bold {ciIcon.cls} hover:surface-raised focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
+					title={ciIcon.label}
+					aria-label={ciIcon.label}
+					aria-expanded={ciDetailsOpen}
+					onclick={(event) => {
+						event.stopPropagation();
+						ciDetailsOpen = !ciDetailsOpen;
+					}}
+				>
+					{ciIcon.symbol}
+				</button>
+				<div
+					class="absolute left-0 top-full z-30 mt-1 hidden w-56 rounded-md border border-panel surface-raised p-2 text-xs shadow-lg group-hover/ci:block {ciDetailsOpen ? '!block' : ''}"
+					role="tooltip"
+				>
+					<div class="mb-1 font-medium text-heading">CI checks</div>
+					{#each card.ciStatus.checks ?? [] as check}
+						{@const checkIcon = check.state === 'success' ? '✓' : check.state === 'failure' ? '✕' : '◌'}
+						<div class="flex items-center gap-1.5 py-0.5 text-body">
+							<span class={check.state === 'success' ? 'text-green-600 dark:text-green-400' : check.state === 'failure' ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'}>{checkIcon}</span>
+							<span class="truncate">{check.name}</span>
+						</div>
+					{/each}
+				</div>
+			</div>
+		{/if}
+	</div>
 	<div
 		class="mb-1.5 text-sm text-heading {expanded ? '' : 'line-clamp-2'} cursor-pointer"
 		role="button"
@@ -157,16 +196,6 @@
 				{/if}
 			{/each}
 		</div>
-	{/if}
-	{#if card.ciStatus}
-		{@const ciBadge = {
-			success: { label: `✓ ${card.ciStatus.total} checks`, cls: 'bg-green-100 text-green-800 dark:bg-green-900/60 dark:text-green-300' },
-			failure: { label: `✕ ${card.ciStatus.failing?.join(', ') ?? 'checks failed'}`, cls: 'bg-red-100 text-red-800 dark:bg-red-900/60 dark:text-red-300' },
-			pending: { label: `◌ ${card.ciStatus.total} checks`, cls: 'bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-300' }
-		}[card.ciStatus.state]}
-		<span class="mb-1.5 inline-flex rounded px-1.5 py-0.5 text-[10px] leading-none {ciBadge.cls}" title="CI checks">
-			{ciBadge.label}
-		</span>
 	{/if}
 	{#if onUpdateNote}
 		{#if editingNote}

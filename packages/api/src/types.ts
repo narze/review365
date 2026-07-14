@@ -4,10 +4,16 @@ export type Platform = "github" | "gitlab";
 
 export type CIState = "success" | "failure" | "pending";
 
+export interface CICheck {
+  name: string;
+  state: CIState;
+}
+
 export interface CIStatus {
   state: CIState;
   total: number;
   failing?: string[];
+  checks: CICheck[];
 }
 
 export type Signal =

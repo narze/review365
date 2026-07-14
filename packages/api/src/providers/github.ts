@@ -173,18 +173,25 @@ async function fetchCIStatus(
   );
   if (checks.length === 0) return undefined;
 
-  const failing = checks
-    .filter((check) =>
-      ["failure", "timed_out", "cancelled", "action_required", "startup_failure"].includes(
-        check.conclusion ?? "",
-      ),
-    )
+  const checkStates = checks.map((check) => ({
+    name: check.name,
+    state: (check.status !== "completed" || check.conclusion === null
+      ? "pending"
+      : ["failure", "timed_out", "cancelled", "action_required", "startup_failure"].includes(
+            check.conclusion,
+          )
+        ? "failure"
+        : "success") as CIStatus["state"],
+  }));
+  const failing = checkStates
+    .filter((check) => check.state === "failure")
     .map((check) => check.name);
-  const pending = checks.some((check) => check.status !== "completed" || check.conclusion === null);
+  const pending = checkStates.some((check) => check.state === "pending");
 
-  if (failing.length > 0) return { state: "failure", total: checks.length, failing };
-  if (pending) return { state: "pending", total: checks.length };
-  return { state: "success", total: checks.length };
+  if (failing.length > 0)
+    return { state: "failure", total: checks.length, failing, checks: checkStates };
+  if (pending) return { state: "pending", total: checks.length, checks: checkStates };
+  return { state: "success", total: checks.length, checks: checkStates };
 }
 
 async function fetchMergedPRs(

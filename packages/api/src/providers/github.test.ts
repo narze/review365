@@ -130,6 +130,14 @@ describe("github fetchPRs", () => {
 
     const [pr] = await githubProvider.fetchPRs(ctx(), ["acme/widgets"], true);
 
-    expect(pr.ciStatus).toEqual({ state: "failure", total: 2, failing: ["lint"] });
+    expect(pr.ciStatus).toEqual({
+      state: "failure",
+      total: 2,
+      failing: ["lint"],
+      checks: [
+        { name: "unit", state: "success" },
+        { name: "lint", state: "failure" },
+      ],
+    });
   });
 });
