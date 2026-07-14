@@ -18,6 +18,8 @@ describe("groupChecks", () => {
       passed: checks.filter((item) => item.state === "success"),
       visiblePassed: checks.filter((item) => item.state === "success").slice(0, 10),
       hiddenPassedCount: 2,
+      failedCount: 1,
+      pendingCount: 1,
     });
   });
 });

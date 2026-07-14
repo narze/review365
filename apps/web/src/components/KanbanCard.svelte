@@ -3,6 +3,7 @@
 	import type { PRCard, Signal } from '@review365/api/types';
 	import { startCardDrag, endCardDrag } from '$lib/drag-state.svelte';
 	import { groupChecks } from '$lib/ci-checks';
+	import { portal } from '$lib/portal';
 
 	let {
 		card,
@@ -22,6 +23,9 @@
 
 	let expanded = $state(false);
 	let ciDetailsOpen = $state(false);
+	let ciButton = $state<HTMLButtonElement>();
+	let ciCloseTimer: ReturnType<typeof setTimeout> | undefined;
+	let ciPopoverPosition = $state({ left: 0, top: 0 });
 	let showAllPassedChecks = $state(false);
 	let didDrag = false;
 	let editingNote = $state(false);
@@ -50,6 +54,25 @@
 	function handleTitleClick() {
 		if (didDrag) return;
 		expanded = !expanded;
+	}
+
+	function positionCIPopover() {
+		if (!ciDetailsOpen || !ciButton) return;
+		const rect = ciButton.getBoundingClientRect();
+		ciPopoverPosition = {
+			left: Math.max(8, Math.min(rect.left, window.innerWidth - 272)),
+			top: rect.bottom + 4
+		};
+	}
+
+	function openCIPopover() {
+		if (ciCloseTimer) clearTimeout(ciCloseTimer);
+		ciDetailsOpen = true;
+		positionCIPopover();
+	}
+
+	function scheduleCIPopoverClose() {
+		ciCloseTimer = setTimeout(() => (ciDetailsOpen = false), 100);
 	}
 
 	async function startEditNote() {
@@ -118,6 +141,8 @@
 	);
 </script>
 
+<svelte:window onresize={positionCIPopover} />
+
 <!-- Roving-tabindex focus target for keyboard board navigation; the card is
 	 deliberately programmatically focusable and key-driven. -->
 <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
@@ -141,32 +166,43 @@
 		{card.repo}
 		<span class="ml-1 text-blue-600 dark:text-blue-300">{card.platform === 'gitlab' ? '!' : '#'}{card.prNumber}</span>
 		{#if card.ciStatus}
+			{@const checkGroups = groupChecks(card.ciStatus.checks ?? [])}
+			{@const failedCount = checkGroups.failedCount}
+			{@const pendingCount = checkGroups.pendingCount}
 			{@const ciIcon = {
 				success: { symbol: '✓', cls: 'text-green-600 dark:text-green-400', label: 'Checks passed' },
-				failure: { symbol: '✕', cls: 'text-red-600 dark:text-red-400', label: 'Checks failed' },
+				failure: { symbol: `✕ (${failedCount})`, cls: 'text-red-600 dark:text-red-400', label: `${failedCount} checks failed` },
 				pending: { symbol: '◌', cls: 'text-amber-600 dark:text-amber-400', label: 'Checks running' }
 			}[card.ciStatus.state]}
-			{@const checkGroups = groupChecks(card.ciStatus.checks ?? [])}
-			{@const failedCount = checkGroups.attention.filter((check) => check.state === 'failure').length}
-			{@const pendingCount = checkGroups.attention.filter((check) => check.state === 'pending').length}
-			<div class="group/ci relative ml-1 inline-flex">
+			<div class="relative ml-1 inline-flex">
 				<button
+					bind:this={ciButton}
 					type="button"
-					class="inline-flex size-4 items-center justify-center rounded text-xs font-bold {ciIcon.cls} hover:surface-raised focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
+					class="inline-flex h-4 min-w-4 items-center justify-center rounded px-0.5 text-xs font-bold {ciIcon.cls} hover:surface-raised focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
 					title={ciIcon.label}
 					aria-label={ciIcon.label}
 					aria-expanded={ciDetailsOpen}
+					onmouseenter={openCIPopover}
+					onmouseleave={scheduleCIPopoverClose}
 					onclick={(event) => {
 						event.stopPropagation();
-						ciDetailsOpen = !ciDetailsOpen;
+						if (ciDetailsOpen) ciDetailsOpen = false;
+						else openCIPopover();
 					}}
 				>
 					{ciIcon.symbol}
 				</button>
+			</div>
+			{#if ciDetailsOpen}
 				<div
-					class="absolute left-0 top-full z-30 mt-1 hidden w-64 rounded-md border border-panel surface-raised text-xs shadow-lg group-hover/ci:block {ciDetailsOpen ? '!block' : ''}"
+					use:portal
+					class="fixed z-50 w-64 rounded-md border border-panel surface-raised text-xs shadow-lg"
+					style={`left: ${ciPopoverPosition.left}px; top: ${ciPopoverPosition.top}px;`}
 					role="dialog"
+					tabindex="-1"
 					aria-label="CI checks"
+					onmouseenter={openCIPopover}
+					onmouseleave={scheduleCIPopoverClose}
 				>
 					<div class="sticky top-0 flex items-center justify-between border-b border-panel surface-raised px-2 py-1.5">
 						<span class="font-medium text-heading">CI checks</span>
@@ -222,8 +258,8 @@
 							Open checks on GitHub ↗
 						</a>
 					</div>
-					</div>
-			</div>
+				</div>
+			{/if}
 		{/if}
 	</div>
 	<div

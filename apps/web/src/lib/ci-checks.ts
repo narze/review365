@@ -12,5 +12,7 @@ export function groupChecks(checks: CICheck[]) {
     passed,
     visiblePassed,
     hiddenPassedCount: passed.length - visiblePassed.length,
+    failedCount: attention.filter((check) => check.state === "failure").length,
+    pendingCount: attention.filter((check) => check.state === "pending").length,
   };
 }
