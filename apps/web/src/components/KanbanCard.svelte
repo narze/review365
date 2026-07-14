@@ -171,7 +171,7 @@
 			{@const pendingCount = checkGroups.pendingCount}
 			{@const ciIcon = {
 				success: { symbol: '✓', cls: 'text-green-600 dark:text-green-400', label: 'Checks passed' },
-				failure: { symbol: `✕ (${failedCount})`, cls: 'text-red-600 dark:text-red-400', label: `${failedCount} checks failed` },
+				failure: { symbol: '✕', cls: 'text-red-600 dark:text-red-400', label: `${failedCount} checks failed` },
 				pending: { symbol: '◌', cls: 'text-amber-600 dark:text-amber-400', label: 'Checks running' }
 			}[card.ciStatus.state]}
 			<div class="relative ml-1 inline-flex">
@@ -191,6 +191,9 @@
 					}}
 				>
 					{ciIcon.symbol}
+					{#if card.ciStatus.state === 'failure'}
+						<span class="font-normal"> ({failedCount})</span>
+					{/if}
 				</button>
 			</div>
 			{#if ciDetailsOpen}
