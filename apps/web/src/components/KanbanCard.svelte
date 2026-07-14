@@ -192,7 +192,7 @@
 				>
 					{ciIcon.symbol}
 					{#if card.ciStatus.state === 'failure'}
-						<span class="font-normal"> ({failedCount})</span>
+						<span class="font-normal ml-0.5">({failedCount})</span>
 					{/if}
 				</button>
 			</div>
