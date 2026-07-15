@@ -11,7 +11,7 @@ Let a reviewer copy every currently visible card in a Kanban column as a Markdow
 - The copied text has one Markdown-link item per card, in the same order as the column:
 
   ```md
-  - [owner/repo#123 — PR title](https://example.test/pull/123)
+  - [owner/repo#123](https://example.test/pull/123) - PR title
   ```
 
 - When archived cards are hidden, they are excluded. When they are shown, they are included.

@@ -554,8 +554,8 @@ test.describe("Review365", () => {
     await expect
       .poll(() => page.evaluate(() => navigator.clipboard.readText()))
       .toBe(
-        "- [test/repo#1 — First PR](https://github.com/test/repo/pull/1)\n" +
-          "- [test/repo#2 — Second PR](https://github.com/test/repo/pull/2)",
+        "- [test/repo#1](https://github.com/test/repo/pull/1) - First PR\n" +
+          "- [test/repo#2](https://github.com/test/repo/pull/2) - Second PR",
       );
   });
 

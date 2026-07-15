@@ -11,7 +11,7 @@
 ## Global Constraints
 
 - Copy only `visibleCards`, preserving their current on-screen order.
-- Each item is `- [repo#number — title](url)`.
+- Each item is `- [repo#number](url) - title`.
 - Include archived cards only when `showArchived` is enabled.
 - Do not modify cards, their order, or unrelated pending workspace changes.
 

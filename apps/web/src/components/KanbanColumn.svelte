@@ -99,7 +99,7 @@
 		}
 
 		const markdown = visibleCards
-			.map((card) => `- [${card.repo}#${card.prNumber} — ${card.title}](${card.url})`)
+			.map((card) => `- [${card.repo}#${card.prNumber}](${card.url}) - ${card.title}`)
 			.join('\n');
 
 		try {
