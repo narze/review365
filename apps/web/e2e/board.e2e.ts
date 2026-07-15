@@ -547,10 +547,9 @@ test.describe("Review365", () => {
     });
 
     await page.goto("/", { waitUntil: "networkidle" });
-    await page
-      .getByRole("region", { name: "📥 Inbox" })
-      .getByRole("button", { name: "Copy list" })
-      .click();
+    const inboxColumn = page.getByRole("region", { name: "📥 Inbox" });
+    await inboxColumn.getByRole("button", { name: "Column actions" }).click();
+    await inboxColumn.getByRole("button", { name: "Copy list" }).click();
 
     await expect
       .poll(() => page.evaluate(() => navigator.clipboard.readText()))

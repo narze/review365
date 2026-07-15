@@ -6,8 +6,8 @@ Let a reviewer copy every currently visible card in a Kanban column as a Markdow
 
 ## Interaction
 
-- Each column header has a `Copy list` button.
-- Activating the button writes the column's current `visibleCards` to the browser clipboard.
+- Each column header has a `⋯` actions button with a `Copy list` menu item.
+- Activating the menu item writes the column's current `visibleCards` to the browser clipboard.
 - The copied text has one Markdown-link item per card, in the same order as the column:
 
   ```md

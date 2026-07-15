@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add a per-column button that copies the visible PR cards to the clipboard as a Markdown list.
+**Goal:** Add a per-column actions menu that copies the visible PR cards to the clipboard as a Markdown list.
 
 **Architecture:** Keep filtering, list formatting, clipboard writing, and status feedback in `KanbanColumn.svelte`, where the displayed card order is already represented by `visibleCards`. Add a browser-level Playwright test so the copied result is validated from the user action through the Clipboard API.
 
@@ -27,7 +27,7 @@
 **Interfaces:**
 
 - Consumes: `visibleCards: PRCard[]`, with `repo`, `prNumber`, `title`, and `url` fields.
-- Produces: a `Copy list` button that calls `navigator.clipboard.writeText(markdown)` and reports its result through its accessible label.
+- Produces: a `⋯` actions button with a `Copy list` menu item that calls `navigator.clipboard.writeText(markdown)`.
 
 - [ ] **Step 1: Write the failing browser test**
 

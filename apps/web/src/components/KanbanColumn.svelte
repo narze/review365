@@ -62,6 +62,7 @@
 	let dropAbove: boolean = $state(false);
 	let sortOpen = $state(false);
 	let sortBtnEl: HTMLButtonElement | undefined = $state();
+	let actionsOpen = $state(false);
 	let copyStatus: 'idle' | 'copied' | 'empty' | 'failed' = $state('idle');
 	let copyStatusTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -75,6 +76,10 @@
 
 	function handleSortKeydown(e: KeyboardEvent) {
 		if (e.key === 'Escape') closeSortDropdown();
+	}
+
+	function closeActionsDropdown() {
+		actionsOpen = false;
 	}
 
 	const visibleCards = $derived(
@@ -190,37 +195,54 @@
 			<span class="rounded-full surface-raised px-2 py-0.5 text-xs text-muted"
 				>{visibleCards.length}</span
 			>
-			<button
-				type="button"
-				onclick={copyVisibleCards}
-				class="cursor-pointer rounded px-1 text-xs transition-colors text-dim hover:text-muted"
-				aria-label={copyStatus === 'copied'
-					? 'List copied'
-					: copyStatus === 'empty'
-						? 'No cards to copy'
-						: copyStatus === 'failed'
-							? 'Copy failed'
-							: 'Copy list'}
-				title={copyStatus === 'copied'
-					? 'List copied'
-					: copyStatus === 'empty'
-						? 'No cards to copy'
-						: copyStatus === 'failed'
-							? 'Copy failed'
-							: 'Copy list'}
-			>
-				{copyStatus === 'copied'
-					? 'Copied'
-					: copyStatus === 'empty'
-						? 'No cards'
-						: copyStatus === 'failed'
-							? 'Failed'
-							: 'Copy list'}
-			</button>
+			<div class="relative">
+				<button
+					type="button"
+					onclick={() => {
+						actionsOpen = !actionsOpen;
+						sortOpen = false;
+					}}
+					class="cursor-pointer rounded px-1 text-base leading-none transition-colors text-dim hover:text-muted"
+					aria-label="Column actions"
+					aria-expanded={actionsOpen}
+					title="Column actions"
+				>
+					⋯
+				</button>
+				{#if actionsOpen}
+					<button
+						type="button"
+						class="fixed inset-0 z-10 cursor-default"
+						aria-label="Close column actions"
+						onclick={closeActionsDropdown}
+					></button>
+					<div class="absolute right-0 top-full z-20 mt-1 w-32 rounded-lg border border-control surface-raised py-1 shadow-xl">
+						<button
+							type="button"
+							onclick={() => {
+								copyVisibleCards();
+								closeActionsDropdown();
+							}}
+							class="w-full px-3 py-1.5 text-left text-xs text-body transition-colors hover:bg-neutral-200 dark:hover:bg-neutral-700"
+						>
+							{copyStatus === 'copied'
+								? 'Copied'
+								: copyStatus === 'empty'
+									? 'No cards to copy'
+									: copyStatus === 'failed'
+										? 'Copy failed'
+										: 'Copy list'}
+						</button>
+					</div>
+				{/if}
+			</div>
 			<div class="relative">
 				<button
 					bind:this={sortBtnEl}
-					onclick={() => (sortOpen = !sortOpen)}
+					onclick={() => {
+						sortOpen = !sortOpen;
+						actionsOpen = false;
+					}}
 					class="cursor-pointer rounded px-1 text-xs transition-colors {sortMode !== 'default'
 						? 'text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300'
 						: 'text-dim hover:text-muted'}"
