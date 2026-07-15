@@ -163,6 +163,38 @@ test.describe("Review365", () => {
     await expect(page.getByRole("button", { name: "Settings" })).toBeVisible();
   });
 
+  test("activity: opens an empty board-wide log", async ({ page }) => {
+    await seedAuth(page);
+    await mockGitHub(page);
+    await page.goto("/", { waitUntil: "networkidle" });
+
+    await page.getByRole("button", { name: "Activity", exact: true }).click();
+    await expect(page.getByRole("dialog", { name: "Activity" })).toBeVisible();
+    await expect(page.getByText("No activity yet")).toBeVisible();
+  });
+
+  test("activity: records a note change and can clear the active platform history", async ({
+    page,
+  }) => {
+    await seedAuth(page, { enabledRepos: [REPO] });
+    await mockGitHub(page, { open: [ghItem(14, "Activity test PR")] });
+    await page.goto("/", { waitUntil: "networkidle" });
+
+    await page.getByRole("button", { name: "Add note..." }).click();
+    await page.locator("input[maxlength='200']").fill("Remember to review this");
+    await page.locator("input[maxlength='200']").press("Enter");
+
+    await page.getByRole("button", { name: "Activity", exact: true }).click();
+    const panel = page.getByRole("dialog", { name: "Activity" });
+    await expect(panel.getByText("test/repo #14")).toBeVisible();
+    await expect(panel.getByText("Activity test PR")).toBeVisible();
+    await expect(panel.getByText("got a note")).toBeVisible();
+
+    page.once("dialog", (dialog) => dialog.accept());
+    await panel.getByRole("button", { name: "Clear" }).click();
+    await expect(panel.getByText("No activity yet")).toBeVisible();
+  });
+
   test("settings panel opens and shows inputs", async ({ page }) => {
     await seedAuth(page);
     await mockGitHub(page);
@@ -505,6 +537,27 @@ test.describe("Review365", () => {
     // Inbox order is restored and the card keeps focus.
     await expect.poll(() => orderOf("📥 Inbox")).toEqual(inboxBefore);
     expect(await focusedId()).toBe(middle);
+  });
+
+  test("column list: copies visible cards as a Markdown list", async ({ page, context }) => {
+    await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+    await seedAuth(page, { enabledRepos: [REPO] });
+    await mockGitHub(page, {
+      open: [ghItem(1, "First PR"), ghItem(2, "Second PR")],
+    });
+
+    await page.goto("/", { waitUntil: "networkidle" });
+    await page
+      .getByRole("region", { name: "📥 Inbox" })
+      .getByRole("button", { name: "Copy list" })
+      .click();
+
+    await expect
+      .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+      .toBe(
+        "- [test/repo#1 — First PR](https://github.com/test/repo/pull/1)\n" +
+          "- [test/repo#2 — Second PR](https://github.com/test/repo/pull/2)",
+      );
   });
 
   test("export excludes token, import restores board", async ({ page }) => {

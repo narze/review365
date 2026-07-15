@@ -62,6 +62,8 @@
 	let dropAbove: boolean = $state(false);
 	let sortOpen = $state(false);
 	let sortBtnEl: HTMLButtonElement | undefined = $state();
+	let copyStatus: 'idle' | 'copied' | 'empty' | 'failed' = $state('idle');
+	let copyStatusTimer: ReturnType<typeof setTimeout> | undefined;
 
 	const activeSortLabel = $derived(
 		SORT_OPTIONS.find((o) => o.value === sortMode)?.label ?? 'Sort'
@@ -78,6 +80,31 @@
 	const visibleCards = $derived(
 		showArchived ? cards : cards.filter((c) => !c.archived)
 	);
+
+	function resetCopyStatus() {
+		if (copyStatusTimer) clearTimeout(copyStatusTimer);
+		copyStatusTimer = setTimeout(() => (copyStatus = 'idle'), 2000);
+	}
+
+	async function copyVisibleCards() {
+		if (visibleCards.length === 0) {
+			copyStatus = 'empty';
+			resetCopyStatus();
+			return;
+		}
+
+		const markdown = visibleCards
+			.map((card) => `- [${card.repo}#${card.prNumber} — ${card.title}](${card.url})`)
+			.join('\n');
+
+		try {
+			await navigator.clipboard.writeText(markdown);
+			copyStatus = 'copied';
+		} catch {
+			copyStatus = 'failed';
+		}
+		resetCopyStatus();
+	}
 
 	// Height of the gap that opens up for the dragged card. Matches the real
 	// card so surrounding cards shift exactly as far as the drop would push them.
@@ -163,6 +190,33 @@
 			<span class="rounded-full surface-raised px-2 py-0.5 text-xs text-muted"
 				>{visibleCards.length}</span
 			>
+			<button
+				type="button"
+				onclick={copyVisibleCards}
+				class="cursor-pointer rounded px-1 text-xs transition-colors text-dim hover:text-muted"
+				aria-label={copyStatus === 'copied'
+					? 'List copied'
+					: copyStatus === 'empty'
+						? 'No cards to copy'
+						: copyStatus === 'failed'
+							? 'Copy failed'
+							: 'Copy list'}
+				title={copyStatus === 'copied'
+					? 'List copied'
+					: copyStatus === 'empty'
+						? 'No cards to copy'
+						: copyStatus === 'failed'
+							? 'Copy failed'
+							: 'Copy list'}
+			>
+				{copyStatus === 'copied'
+					? 'Copied'
+					: copyStatus === 'empty'
+						? 'No cards'
+						: copyStatus === 'failed'
+							? 'Failed'
+							: 'Copy list'}
+			</button>
 			<div class="relative">
 				<button
 					bind:this={sortBtnEl}
