@@ -507,6 +507,26 @@ test.describe("Review365", () => {
     expect(await focusedId()).toBe(middle);
   });
 
+  test("column list: copies visible cards as a Markdown list", async ({ page, context }) => {
+    await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+    await seedAuth(page, { enabledRepos: [REPO] });
+    await mockGitHub(page, {
+      open: [ghItem(1, "First PR"), ghItem(2, "Second PR")],
+    });
+
+    await page.goto("/", { waitUntil: "networkidle" });
+    const inboxColumn = page.getByRole("region", { name: "📥 Inbox" });
+    await inboxColumn.getByRole("button", { name: "Column actions" }).click();
+    await inboxColumn.getByRole("button", { name: "Copy list" }).click();
+
+    await expect
+      .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+      .toBe(
+        "- [test/repo#1](https://github.com/test/repo/pull/1) - First PR\n" +
+          "- [test/repo#2](https://github.com/test/repo/pull/2) - Second PR",
+      );
+  });
+
   test("export excludes token, import restores board", async ({ page }) => {
     await seedAuth(page, { enabledRepos: [REPO] });
     await mockGitHub(page);
