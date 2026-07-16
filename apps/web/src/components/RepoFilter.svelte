@@ -95,6 +95,7 @@
 							class="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm hover-surface {isStale(repo)
 								? 'opacity-50'
 								: ''}"
+							title={repo}
 						>
 							<input type="checkbox" checked onchange={() => onToggle(repo)} />
 							<span class="flex-1 truncate text-heading">{repo}</span>
@@ -134,6 +135,7 @@
 						class="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover-surface {enabledRepos.includes(repo)
 							? 'cursor-default opacity-60'
 							: 'cursor-pointer'}"
+						title={repo}
 					>
 						<input
 							type="checkbox"
