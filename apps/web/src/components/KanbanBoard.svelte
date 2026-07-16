@@ -6,10 +6,12 @@
 	import ColumnManager from './ColumnManager.svelte';
 	import RuleManager from './RuleManager.svelte';
 	import AccountSettings from './AccountSettings.svelte';
+	import ActivityPanel from './ActivityPanel.svelte';
 	import { SvelteMap } from 'svelte/reactivity';
 	import { tick } from 'svelte';
 	import { getTheme, setTheme, type Theme } from '$lib/theme';
 	import { nextCardId, columnEdgeId, type Dir } from '$lib/card-navigation';
+	import type { ActivityEvent } from '$lib/activity';
 
 	let {
 		cards = [],
@@ -40,6 +42,10 @@
 		platform,
 		login,
 		onSwitchPlatform,
+		activities = [],
+		hasUnseenActivity = false,
+		onActivitySeen,
+		onClearActivity,
 		loading = false,
 		online = true
 	}: {
@@ -71,11 +77,16 @@
 		platform: Platform;
 		login: string | null;
 		onSwitchPlatform: (platform: Platform) => void;
+		activities?: ActivityEvent[];
+		hasUnseenActivity?: boolean;
+		onActivitySeen: () => void;
+		onClearActivity: () => void;
 		loading?: boolean;
 		online?: boolean;
 	} = $props();
 
 	let showSettings = $state(false);
+	let showActivity = $state(false);
 	let theme = $state<Theme>(getTheme());
 	let showArchived = $state(false);
 	let refreshing = $state(false);
@@ -158,6 +169,20 @@
 	function onThemeChange(next: Theme) {
 		theme = next;
 		setTheme(next);
+	}
+
+	function openActivity() {
+		showActivity = true;
+		onActivitySeen();
+	}
+
+	function selectActivity(activity: ActivityEvent) {
+		showActivity = false;
+		if (cards.some((card) => card.id === activity.card.cardId)) {
+			focusCard(activity.card.cardId);
+		} else {
+			window.open(activity.card.url, '_blank', 'noopener');
+		}
 	}
 
 	async function handleRefresh() {
@@ -429,6 +454,16 @@
 
 	<div class="order-2 ml-auto flex gap-2 sm:order-5">
 		<button
+			class="btn-secondary relative px-2.5 py-1.5 text-sm text-heading sm:px-3 {showActivity ? 'border-blue-500' : ''}"
+			onclick={openActivity}
+			aria-label="Activity"
+		>
+			🕘<span class="hidden sm:inline"> Activity</span>
+			{#if hasUnseenActivity}
+				<span class="absolute right-1 top-1 h-2 w-2 rounded-full bg-blue-500" aria-label="New activity"></span>
+			{/if}
+		</button>
+		<button
 			class="btn-secondary px-2.5 py-1.5 text-sm text-heading disabled:opacity-40 sm:px-3"
 			disabled={refreshing}
 			onclick={handleRefresh}
@@ -471,6 +506,15 @@
 	<div class="border-b border-amber-900/50 bg-amber-950/40 px-6 py-1.5 text-xs text-amber-400">
 		📡 Offline — showing the last cards loaded. Reconnect to refresh.
 	</div>
+{/if}
+
+{#if showActivity}
+	<ActivityPanel
+		{activities}
+		onClose={() => (showActivity = false)}
+		onClear={onClearActivity}
+		onSelect={selectActivity}
+	/>
 {/if}
 
 {#if showSettings}
