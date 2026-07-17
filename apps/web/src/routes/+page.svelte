@@ -12,10 +12,25 @@
 		board,
 		config as configService
 	} from '$lib/board-service';
+	import {
+		appendActivity,
+		classifyNoteChange,
+		flushPendingMoves,
+		queuePendingMove,
+		type ActivityCard,
+		type ActivityEvent,
+		type ActivitySource,
+		type ActivityState
+	} from '$lib/activity';
+	import { activityKey, loadActivityState, saveActivityState } from '$lib/activity-store';
 
 	let signedIn = $state(hasToken());
 	let platform = $state<Platform>(getPlatform());
 	let login = $state<string | null>(getLogin());
+	let activityState = $state<ActivityState>(
+		hasToken() ? loadActivityState(getPlatform()) : { events: [], pendingMoves: {} }
+	);
+	const activityTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 	// Repos/columns/rules/retention are pure local config: always read fresh from
 	// localStorage, never round-tripped through a fetch response (see board-service).
@@ -43,6 +58,92 @@
 	// was already in flight when the edit happened doesn't resolve and overwrite it with
 	// the pre-edit state it captured when it started.
 	let cardsEditSeq = 0;
+	const hasUnseenActivity = $derived(
+		activityState.events.some(
+			(activity) => !activityState.lastSeenAt || activity.createdAt > activityState.lastSeenAt
+		)
+	);
+
+	function cardActivity(card: PRCard): ActivityCard {
+		return {
+			cardId: card.id,
+			repo: card.repo,
+			number: card.prNumber,
+			title: card.title,
+			url: card.url,
+			platform: card.platform
+		};
+	}
+
+	function activityId(cardId: string): string {
+		return `${cardId}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
+	}
+
+	function armActivityTimers() {
+		for (const timer of activityTimers.values()) clearTimeout(timer);
+		activityTimers.clear();
+		for (const pending of Object.values(activityState.pendingMoves)) {
+			activityTimers.set(
+				pending.cardId,
+				setTimeout(() => flushActivityMoves(), Math.max(0, pending.dueAt - Date.now()))
+			);
+		}
+	}
+
+	function persistActivity(next: ActivityState) {
+		activityState = next;
+		saveActivityState(platform, next);
+		armActivityTimers();
+	}
+
+	function flushActivityMoves() {
+		persistActivity(flushPendingMoves(activityState));
+	}
+
+	function logActivity(
+		type: ActivityEvent['type'],
+		source: ActivitySource,
+		card: ActivityCard,
+		details: Pick<ActivityEvent, 'fromColumn' | 'toColumn'> = {}
+	) {
+		persistActivity({
+			...activityState,
+			events: appendActivity(activityState.events, {
+				id: activityId(card.cardId),
+				createdAt: new Date().toISOString(),
+				type,
+				source,
+				card,
+				...details
+			})
+		});
+	}
+
+	function logColumnMove(card: PRCard, fromColumn: ColumnId, toColumn: ColumnId, source: ActivitySource) {
+		if (fromColumn === toColumn) return;
+		persistActivity(
+			queuePendingMove(activityState, {
+				...cardActivity(card),
+				source,
+				fromColumn,
+				toColumn,
+				dueAt: Date.now() + 5000
+			})
+		);
+	}
+
+	function markActivitySeen() {
+		persistActivity({ ...activityState, lastSeenAt: new Date().toISOString() });
+	}
+
+	function clearActivity() {
+		persistActivity({
+			events: [],
+			pendingMoves: {},
+			initialized: true,
+			lastSeenAt: new Date().toISOString()
+		});
+	}
 
 	/** Paints a platform's local config + last-known cards immediately, before any fetch resolves. */
 	function hydrate() {
@@ -56,6 +157,8 @@
 		columnWidthPx = local.columnWidthPx;
 		cards = loadCachedCards();
 		loading = !hasCachedCards();
+		activityState = loadActivityState(platform);
+		armActivityTimers();
 	}
 
 	async function refresh(force = false) {
@@ -68,6 +171,16 @@
 				// result now would revert that edit, so refetch instead of overwriting it.
 				await refresh(force);
 				return;
+			}
+			if (!activityState.initialized) {
+				persistActivity({ ...activityState, initialized: true });
+			} else {
+				const previousCards = new Map(cards.map((card) => [card.id, card]));
+				for (const card of data.cards) {
+					const previous = previousCards.get(card.id);
+					if (!previous) logActivity('discovered', 'automation', cardActivity(card));
+					else logColumnMove(card, previous.columnId, card.columnId, 'automation');
+				}
 			}
 			cards = data.cards;
 			orphans = data.orphans;
@@ -93,14 +206,17 @@
 	}
 
 	async function onMoveCard(cardId: string, column: ColumnId) {
+		const previous = cards.find((card) => card.id === cardId);
 		cardsEditSeq++;
 		cards = cards.map((c) =>
 			c.id === cardId ? { ...c, columnId: column, order: Date.now() } : c
 		);
 		await board.moveCard(cardId, column);
+		if (previous) logColumnMove(previous, previous.columnId, column, 'manual');
 	}
 
 	async function onReorderCard(cardId: string, targetCardId: string | null, column: ColumnId) {
+		const previous = cards.find((card) => card.id === cardId);
 		cardsEditSeq++;
 		cards = cards.map((c) =>
 			c.id === cardId ? { ...c, columnId: column } : c
@@ -131,24 +247,34 @@
 		});
 
 		await board.reorderCard(cardId, targetCardId, column);
+		if (previous) logColumnMove(previous, previous.columnId, column, 'manual');
 	}
 
 	async function onArchiveCard(cardId: string) {
+		const previous = cards.find((card) => card.id === cardId);
 		cardsEditSeq++;
 		cards = cards.map((c) => (c.id === cardId ? { ...c, archived: true } : c));
 		await board.archiveCard(cardId);
+		if (previous) logActivity('archived', 'manual', cardActivity(previous));
 	}
 
 	async function onUnarchiveCard(cardId: string) {
+		const previous = cards.find((card) => card.id === cardId);
 		cardsEditSeq++;
 		cards = cards.map((c) => (c.id === cardId ? { ...c, archived: false } : c));
 		await board.unarchiveCard(cardId);
+		if (previous) logActivity('unarchived', 'manual', cardActivity(previous));
 	}
 
 	async function onUpdateNote(cardId: string, note: string) {
+		const previous = cards.find((card) => card.id === cardId);
 		cardsEditSeq++;
 		cards = cards.map((c) => (c.id === cardId ? { ...c, note: note || undefined } : c));
 		await board.updateNote(cardId, note);
+		if (previous) {
+			const type = classifyNoteChange(previous.note, note);
+			if (type) logActivity(type, 'manual', cardActivity(previous));
+		}
 	}
 
 	function applyConfig(updated: { columns: ColumnDef[]; rules: unknown[] }) {
@@ -203,6 +329,8 @@
 	function onSwitchPlatform(next: Platform) {
 		setPlatform(next);
 		platform = next;
+		activityState = loadActivityState(next);
+		armActivityTimers();
 		login = getLogin(next);
 		hydrate();
 		if (hasToken(next)) {
@@ -215,6 +343,7 @@
 
 	let interval: ReturnType<typeof setInterval>;
 	onMount(() => {
+		flushActivityMoves();
 		refresh(false);
 		interval = setInterval(() => refresh(false), 5 * 60 * 1000);
 
@@ -227,11 +356,20 @@
 		};
 		window.addEventListener('online', goOnline);
 		window.addEventListener('offline', goOffline);
+		const syncActivity = (event: StorageEvent) => {
+			if (event.key === activityKey(platform)) {
+				activityState = loadActivityState(platform);
+				armActivityTimers();
+			}
+		};
+		window.addEventListener('storage', syncActivity);
 
 		return () => {
 			clearInterval(interval);
 			window.removeEventListener('online', goOnline);
 			window.removeEventListener('offline', goOffline);
+			window.removeEventListener('storage', syncActivity);
+			for (const timer of activityTimers.values()) clearTimeout(timer);
 		};
 	});
 </script>
@@ -294,6 +432,10 @@
 		{onSignOut}
 		{platform}
 		{login}
+		activities={activityState.events}
+		{hasUnseenActivity}
+		onActivitySeen={markActivitySeen}
+		onClearActivity={clearActivity}
 		{onSwitchPlatform}
 		{loading}
 		{online}
