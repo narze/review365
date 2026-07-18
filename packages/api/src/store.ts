@@ -143,3 +143,81 @@ export function applyAutomation(
 
   return updated;
 }
+
+/**
+ * Ensure every card in the current fetch has a `firstSeenAt` timestamp.
+ * New cards get `now`; existing cards keep their original timestamp.
+ * Returns a new state object; safe to call every refresh.
+ */
+export function stampFirstSeen(state: BoardState, cardIds: string[], now = Date.now()): BoardState {
+  const iso = new Date(now).toISOString();
+  const cards = { ...state.cards };
+  let changed = false;
+
+  for (const id of cardIds) {
+    const entry = cards[id];
+    if (!entry) {
+      // Brand new card — create a minimal entry so firstSeenAt persists even
+      // before the user drags it. column falls back via getCardColumn.
+      cards[id] = { column: "inbox", order: now, firstSeenAt: iso };
+      changed = true;
+    } else if (!entry.firstSeenAt) {
+      cards[id] = { ...entry, firstSeenAt: iso };
+      changed = true;
+    }
+  }
+
+  return changed ? { ...state, cards } : state;
+}
+
+/**
+ * Drop state entries for cards that no longer appear in the fetch result
+ * (PR closed/merged/disappeared). Keeps note/manual moves ONLY if the card
+ * is still being fetched. Archived cards are pruned too — closed PRs don't
+ * need archived state.
+ */
+export function pruneMissingCards(state: BoardState, currentCardIds: string[]): BoardState {
+  const keep = new Set(currentCardIds);
+  const cards: typeof state.cards = {};
+  let changed = false;
+
+  for (const [id, entry] of Object.entries(state.cards)) {
+    if (keep.has(id)) {
+      cards[id] = entry;
+    } else {
+      changed = true;
+    }
+  }
+
+  return changed ? { ...state, cards } : state;
+}
+
+/**
+ * SLA age in whole days, based on the earlier of `firstSeenAt` (when Review365
+ * first showed the card) and the PR's `updatedAt` on the platform. We pick the
+ * EARLIER timestamp because a PR that's been ignored locally but touched
+ * recently on GitHub is still "active" — the relevant SLA clock is when the
+ * reviewer became responsible.
+ *
+ * Falls back to `updatedAt` if `firstSeenAt` is missing (legacy cards).
+ */
+export function slaAgeDays(firstSeenAt: string | undefined, updatedAt: string, now = Date.now()): number {
+  const updatedMs = new Date(updatedAt).getTime();
+  const seenMs = firstSeenAt ? new Date(firstSeenAt).getTime() : updatedMs;
+  const earliest = Math.min(updatedMs, seenMs);
+  return Math.max(0, Math.floor((now - earliest) / 86400000));
+}
+
+export type SlaLevel = "fresh" | "warning" | "critical";
+
+/**
+ * Map an SLA age to a level using config thresholds. Defaults to 3/7 days.
+ * Critical wins if both are equal/missing.
+ */
+export function slaLevel(ageDays: number, config: { slaWarningDays?: number; slaCriticalDays?: number }): SlaLevel {
+  const warning = config.slaWarningDays ?? 3;
+  const critical = config.slaCriticalDays ?? 7;
+  if (ageDays >= critical) return "critical";
+  if (ageDays >= warning) return "warning";
+  return "fresh";
+}

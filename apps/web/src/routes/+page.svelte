@@ -35,6 +35,12 @@
 	let columnWidthPx = $state<number>(
 		initialLocal?.columnWidthPx ?? DEFAULT_CONFIG.columnWidthPx ?? 300
 	);
+	let slaWarningDays = $state<number>(
+		initialLocal?.slaWarningDays ?? DEFAULT_CONFIG.slaWarningDays ?? 3
+	);
+	let slaCriticalDays = $state<number>(
+		initialLocal?.slaCriticalDays ?? DEFAULT_CONFIG.slaCriticalDays ?? 7
+	);
 	// True only while there are no cards to show yet (first-ever visit, nothing fetched).
 	// Once we have cached or fetched cards, later refreshes happen quietly in the background.
 	let loading = $state(hasToken() && !hasCachedCards());
@@ -54,6 +60,8 @@
 		signalLabels = local.signalLabels;
 		mergedRetentionDays = local.mergedRetentionDays;
 		columnWidthPx = local.columnWidthPx;
+		slaWarningDays = local.slaWarningDays;
+		slaCriticalDays = local.slaCriticalDays;
 		cards = loadCachedCards();
 		loading = !hasCachedCards();
 	}
@@ -297,6 +305,8 @@
 		{onSwitchPlatform}
 		{loading}
 		{online}
+		{slaWarningDays}
+		{slaCriticalDays}
 		onImported={() => {
 			hydrate();
 			refresh(true);

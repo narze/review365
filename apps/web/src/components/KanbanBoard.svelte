@@ -40,7 +40,9 @@
 		login,
 		onSwitchPlatform,
 		loading = false,
-		online = true
+		online = true,
+		slaWarningDays = 3,
+		slaCriticalDays = 7
 	}: {
 		cards: PRCard[];
 		columns: ColumnDef[];
@@ -72,6 +74,8 @@
 		onSwitchPlatform: (platform: Platform) => void;
 		loading?: boolean;
 		online?: boolean;
+		slaWarningDays?: number;
+		slaCriticalDays?: number;
 	} = $props();
 
 	let showSettings = $state(false);
@@ -454,7 +458,7 @@
 {#if showSettings}
 	<div class="border-b border-panel surface-panel p-4">
 		<div class="mx-auto max-w-3xl grid gap-6">
-			<AccountSettings {platform} {login} {onSignOut} {onImported} {onSwitchPlatform} />
+			<AccountSettings {platform} {login} {columns} {onSignOut} {onImported} {onSwitchPlatform} />
 			<ColumnManager {columns} onAdd={onAddColumn} onRename={onRenameColumn} onDelete={onDeleteColumn} />
 			<RuleManager {columns} {rules} {signalLabels} onAdd={onAddRule} onDelete={onDeleteRule} />
 			<div class="flex items-center gap-3 rounded-lg border border-panel p-4">
@@ -548,6 +552,8 @@
 					onSort={(mode) => onSortColumn(col.id, mode as SortMode)}
 					{focusedCardId}
 					{onSelectCard}
+					{slaWarningDays}
+					{slaCriticalDays}
 				/>
 			</div>
 		{/each}
@@ -564,6 +570,8 @@
 				{showArchived}
 				{focusedCardId}
 				{onSelectCard}
+				{slaWarningDays}
+				{slaCriticalDays}
 			/>
 {/if}
 </div>

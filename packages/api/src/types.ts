@@ -23,11 +23,27 @@ export interface AutomationRule {
   columnId: string;
 }
 
+/** Discord notification config. Empty/missing = disabled. */
+export interface DiscordConfig {
+  /** Full Discord webhook URL (https://discord.com/api/webhooks/...). Stored in localStorage. */
+  webhookUrl: string;
+  /** Column IDs that should trigger a notification when a card moves into them. */
+  notifyColumnIds: string[];
+  /** Optional bot display name. Defaults to "Review365". */
+  botName?: string;
+}
+
 export interface BoardConfig {
   columns: ColumnDef[];
   rules: AutomationRule[];
   mergedRetentionDays?: number;
   columnWidthPx?: number;
+  /** Days a card can sit on the board before showing the SLA warning badge. */
+  slaWarningDays?: number;
+  /** Days before SLA flips to critical (red). Must be > slaWarningDays. */
+  slaCriticalDays?: number;
+  /** Discord webhook integration. Omit or clear webhookUrl to disable. */
+  discord?: DiscordConfig;
 }
 
 export interface PRCard {
@@ -45,12 +61,22 @@ export interface PRCard {
   archived: boolean;
   order: number;
   note?: string;
+  /** ISO timestamp when Review365 first saw this PR. Drives SLA/aging badge. */
+  firstSeenAt?: string;
 }
 
 export interface BoardState {
   cards: Record<
     string,
-    { column: ColumnId; order: number; archived?: boolean; manual?: boolean; note?: string }
+    {
+      column: ColumnId;
+      order: number;
+      archived?: boolean;
+      manual?: boolean;
+      note?: string;
+      /** ISO timestamp when this card ID first appeared in a fetch result. */
+      firstSeenAt?: string;
+    }
   >;
   enabledRepos?: string[];
 }
@@ -71,6 +97,8 @@ export const DEFAULT_CONFIG: BoardConfig = {
   ],
   mergedRetentionDays: 14,
   columnWidthPx: 300,
+  slaWarningDays: 3,
+  slaCriticalDays: 7,
 };
 
 export const SIGNAL_LABELS: Record<Signal, string> = {

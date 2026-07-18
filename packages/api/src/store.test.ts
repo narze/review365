@@ -11,6 +11,10 @@ import {
   toggleRepo,
   findOrphanedCards,
   applyAutomation,
+  stampFirstSeen,
+  pruneMissingCards,
+  slaAgeDays,
+  slaLevel,
 } from "./store";
 
 function emptyState(): BoardState {
@@ -301,5 +305,137 @@ describe("applyAutomation", () => {
     const result = applyAutomation(s, signals, rules);
     expect(result.cards["pr_a"].order).toBe(100);
     expect(result.cards["pr_a"].column).toBe("approved");
+  });
+});
+
+// ── stampFirstSeen ──
+
+describe("stampFirstSeen", () => {
+  it("adds firstSeenAt for brand-new card ids", () => {
+    const s = emptyState();
+    const now = 1_700_000_000_000;
+    const result = stampFirstSeen(s, ["pr_new"], now);
+    expect(result.cards["pr_new"].firstSeenAt).toBe(new Date(now).toISOString());
+  });
+
+  it("does not overwrite firstSeenAt for cards that already have one", () => {
+    const existing = "2024-01-01T00:00:00.000Z";
+    const s = stateWith("pr_a", "inbox", 0, { firstSeenAt: existing });
+    const result = stampFirstSeen(s, ["pr_a"], 1_700_000_000_000);
+    expect(result.cards["pr_a"].firstSeenAt).toBe(existing);
+  });
+
+  it("stamps firstSeenAt on existing card entries that are missing it", () => {
+    const s = stateWith("pr_a", "inbox", 0);
+    expect(s.cards["pr_a"].firstSeenAt).toBeUndefined();
+    const now = 1_700_000_000_000;
+    const result = stampFirstSeen(s, ["pr_a"], now);
+    expect(result.cards["pr_a"].firstSeenAt).toBe(new Date(now).toISOString());
+  });
+
+  it("returns the same state reference when nothing changes", () => {
+    const iso = new Date(1_700_000_000_000).toISOString();
+    const s = stateWith("pr_a", "inbox", 0, { firstSeenAt: iso });
+    const result = stampFirstSeen(s, ["pr_a"], 1_700_000_000_001);
+    expect(result).toBe(s);
+  });
+
+  it("preserves other card fields when stamping an existing entry", () => {
+    const s = stateWith("pr_a", "reviewing", 42, { manual: true, note: "hi" });
+    const result = stampFirstSeen(s, ["pr_a"], 1_700_000_000_000);
+    expect(result.cards["pr_a"].column).toBe("reviewing");
+    expect(result.cards["pr_a"].order).toBe(42);
+    expect(result.cards["pr_a"].manual).toBe(true);
+    expect(result.cards["pr_a"].note).toBe("hi");
+    expect(result.cards["pr_a"].firstSeenAt).toBeDefined();
+  });
+});
+
+// ── pruneMissingCards ──
+
+describe("pruneMissingCards", () => {
+  it("removes cards that no longer appear in the fetch result", () => {
+    const s = {
+      cards: {
+        pr_a: { column: "inbox", order: 1 },
+        pr_b: { column: "inbox", order: 2 },
+      },
+    };
+    const result = pruneMissingCards(s, ["pr_a"]);
+    expect(Object.keys(result.cards)).toEqual(["pr_a"]);
+  });
+
+  it("returns same reference when nothing would be pruned", () => {
+    const s = stateWith("pr_a", "inbox");
+    const result = pruneMissingCards(s, ["pr_a"]);
+    expect(result).toBe(s);
+  });
+
+  it("prunes everything when currentCardIds is empty", () => {
+    const s = {
+      cards: {
+        pr_a: { column: "inbox", order: 1 },
+        pr_b: { column: "inbox", order: 2 },
+      },
+    };
+    const result = pruneMissingCards(s, []);
+    expect(Object.keys(result.cards)).toEqual([]);
+  });
+});
+
+// ── slaAgeDays ──
+
+describe("slaAgeDays", () => {
+  const now = Date.UTC(2025, 0, 10, 0, 0, 0); // 2025-01-10T00:00:00Z
+  const dayMs = 86_400_000;
+
+  it("returns 0 when firstSeenAt and updatedAt are both now", () => {
+    const iso = new Date(now).toISOString();
+    expect(slaAgeDays(iso, iso, now)).toBe(0);
+  });
+
+  it("uses firstSeenAt when earlier than updatedAt", () => {
+    const firstSeen = new Date(now - 5 * dayMs).toISOString();
+    const updated = new Date(now - 1 * dayMs).toISOString();
+    expect(slaAgeDays(firstSeen, updated, now)).toBe(5);
+  });
+
+  it("uses updatedAt when earlier than firstSeenAt", () => {
+    const firstSeen = new Date(now - 1 * dayMs).toISOString();
+    const updated = new Date(now - 5 * dayMs).toISOString();
+    expect(slaAgeDays(firstSeen, updated, now)).toBe(5);
+  });
+
+  it("falls back to updatedAt when firstSeenAt is undefined", () => {
+    const updated = new Date(now - 3 * dayMs).toISOString();
+    expect(slaAgeDays(undefined, updated, now)).toBe(3);
+  });
+
+  it("clamps negative ages to 0 (clock skew)", () => {
+    const future = new Date(now + dayMs).toISOString();
+    expect(slaAgeDays(future, future, now)).toBe(0);
+  });
+});
+
+// ── slaLevel ──
+
+describe("slaLevel", () => {
+  it("returns fresh below warning threshold", () => {
+    expect(slaLevel(2, { slaWarningDays: 3, slaCriticalDays: 7 })).toBe("fresh");
+  });
+
+  it("returns warning at or above warning threshold", () => {
+    expect(slaLevel(3, { slaWarningDays: 3, slaCriticalDays: 7 })).toBe("warning");
+    expect(slaLevel(6, { slaWarningDays: 3, slaCriticalDays: 7 })).toBe("warning");
+  });
+
+  it("returns critical at or above critical threshold", () => {
+    expect(slaLevel(7, { slaWarningDays: 3, slaCriticalDays: 7 })).toBe("critical");
+    expect(slaLevel(30, { slaWarningDays: 3, slaCriticalDays: 7 })).toBe("critical");
+  });
+
+  it("uses defaults 3/7 when config is missing", () => {
+    expect(slaLevel(3, {})).toBe("warning");
+    expect(slaLevel(7, {})).toBe("critical");
   });
 });

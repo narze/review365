@@ -5,6 +5,8 @@
 
 	let {
 		card,
+		slaWarningDays = 3,
+		slaCriticalDays = 7,
 		onArchive,
 		onUnarchive,
 		onUpdateNote,
@@ -12,6 +14,8 @@
 		onSelect
 	}: {
 		card: PRCard;
+		slaWarningDays?: number;
+		slaCriticalDays?: number;
 		onArchive?: (id: string) => void;
 		onUnarchive?: (id: string) => void;
 		onUpdateNote?: (cardId: string, note: string) => void;
@@ -109,10 +113,42 @@
 		'changes-requested': { label: 'changes', cls: 'bg-red-100 text-red-800 dark:bg-red-900/60 dark:text-red-300' }
 	} satisfies Record<Signal, { label: string; cls: string }>;
 
-	const age = $derived(daysAgo(card.updatedAt));
-	const ageBorder = $derived(
-		age < 1 ? '' : age < 3 ? 'border-l-amber-600' : age < 7 ? 'border-l-orange-600' : 'border-l-red-600'
+	// SLA age: days since the EARLIER of firstSeenAt (board-side) or updatedAt
+	// (platform-side). Whichever is older represents when the reviewer became
+	// responsible. Falls back to updatedAt for legacy cards without firstSeenAt.
+	function earliestTimestamp(firstSeen: string | undefined, updated: string): number {
+		const updatedMs = new Date(updated).getTime();
+		if (!firstSeen) return updatedMs;
+		return Math.min(updatedMs, new Date(firstSeen).getTime());
+	}
+
+	const slaAge = $derived(
+		Math.max(0, Math.floor((Date.now() - earliestTimestamp(card.firstSeenAt, card.updatedAt)) / 86_400_000))
 	);
+	type SlaLevel = 'fresh' | 'warning' | 'critical';
+	const slaLevel = $derived<SlaLevel>(
+		slaAge >= slaCriticalDays ? 'critical' : slaAge >= slaWarningDays ? 'warning' : 'fresh'
+	);
+	const slaStyles: Record<SlaLevel, { border: string; bg: string; badge: string; label: string }> = {
+		fresh: {
+			border: '',
+			bg: '',
+			badge: 'bg-neutral-100 text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400',
+			label: ''
+		},
+		warning: {
+			border: 'border-l-amber-500',
+			bg: 'bg-amber-50/60 dark:bg-amber-950/20',
+			badge: 'bg-amber-200 text-amber-900 dark:bg-amber-900/70 dark:text-amber-200',
+			label: '⚠'
+		},
+		critical: {
+			border: 'border-l-red-500',
+			bg: 'bg-red-50/70 dark:bg-red-950/25',
+			badge: 'bg-red-200 text-red-900 dark:bg-red-900/70 dark:text-red-200',
+			label: '🚨'
+		}
+	};
 </script>
 
 <!-- Roving-tabindex focus target for keyboard board navigation; the card is
@@ -122,7 +158,7 @@
 <div
 	data-card-id={card.id}
 	tabindex={-1}
-	class="group relative block select-none rounded-lg border border-panel surface-panel p-3 outline-none transition-colors {ageBorder} {card.archived
+	class="group relative block select-none rounded-lg border border-panel surface-panel p-3 outline-none transition-colors {slaStyles[slaLevel].border} {slaStyles[slaLevel].bg} {card.archived
 		? 'opacity-50'
 		: 'cursor-grab hover:border-blue-500 hover:shadow-[0_0_0_1px_rgba(88,166,255,0.2)]'} {focused
 		? 'ring-2 ring-blue-500'
@@ -199,9 +235,13 @@
 	{/if}
 	<div class="flex items-center justify-between text-xs text-muted">
 		<span>{card.isOwnPR ? '🤖' : '👤'} {card.author}</span>
-		<span class="flex items-center gap-1">
-			<span class={age < 1 ? 'text-faint' : age < 3 ? 'text-amber-500 dark:text-amber-400' : age < 7 ? 'text-orange-500 dark:text-orange-400' : 'text-red-500 dark:text-red-400'}>●</span>
-			{timeAgo(card.updatedAt)}
+		<span class="flex items-center gap-1.5">
+			<span
+				class="rounded px-1.5 py-0.5 text-[10px] font-semibold leading-none {slaStyles[slaLevel].badge}"
+				title={`First seen ${card.firstSeenAt ? timeAgo(card.firstSeenAt) : 'unknown'} · PR updated ${timeAgo(card.updatedAt)}`}
+			>
+				{slaStyles[slaLevel].label} {slaAge}d
+			</span>
 		</span>
 	</div>
 	<a

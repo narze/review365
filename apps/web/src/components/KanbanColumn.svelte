@@ -30,7 +30,9 @@
 		onSort = () => {},
 		width = 300,
 		focusedCardId = null,
-		onSelectCard
+		onSelectCard,
+		slaWarningDays = 3,
+		slaCriticalDays = 7
 	}: {
 		col: ColumnDef;
 		cards: PRCard[];
@@ -47,6 +49,8 @@
 		width?: number;
 		focusedCardId?: string | null;
 		onSelectCard?: (id: string) => void;
+		slaWarningDays?: number;
+		slaCriticalDays?: number;
 	} = $props();
 
 	let isOver = $state(false);
@@ -228,14 +232,16 @@
 					></div>
 				{/if}
 				<div role="presentation" ondragover={(e) => handleCardDragOver(e, card.id)}>
-					<KanbanCard
-						{card}
-						{onArchive}
-						{onUnarchive}
-						{onUpdateNote}
-						focused={card.id === focusedCardId}
-						onSelect={onSelectCard}
-					/>
+				<KanbanCard
+					{card}
+					{onArchive}
+					{onUnarchive}
+					{onUpdateNote}
+					{slaWarningDays}
+					{slaCriticalDays}
+					focused={card.id === focusedCardId}
+					onSelect={onSelectCard}
+				/>
 				</div>
 				{#if dropTargetId === card.id && !dropAbove && card.id !== cardDrag.cardId}
 					<div

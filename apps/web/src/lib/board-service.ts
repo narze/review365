@@ -11,6 +11,8 @@ import {
   archiveCard,
   unarchiveCard,
   updateNote,
+  stampFirstSeen,
+  pruneMissingCards,
 } from "@review365/api/store";
 import {
   addColumn,
@@ -20,9 +22,12 @@ import {
   addRule,
   deleteRule,
   setColumnWidth,
+  setDiscord,
+  clearDiscord,
 } from "@review365/api/config";
+import { notifyCardMoved } from "@review365/api/notifications/discord";
 import { SIGNAL_LABELS } from "@review365/api/types";
-import type { BoardState, ColumnId, PRCard, Signal } from "@review365/api/types";
+import type { BoardState, ColumnId, PRCard, Signal, DiscordConfig } from "@review365/api/types";
 import type { BoardConfig } from "@review365/api/config";
 import { boardStore, configStore, loadBoardState, loadBoardConfig } from "./local-store";
 import { getToken, getLogin, getHost, getPlatform } from "./auth";
@@ -54,6 +59,9 @@ export function loadLocalBoard() {
     signalLabels: SIGNAL_LABELS,
     mergedRetentionDays: config.mergedRetentionDays ?? 14,
     columnWidthPx: config.columnWidthPx ?? 300,
+    slaWarningDays: config.slaWarningDays ?? 3,
+    slaCriticalDays: config.slaCriticalDays ?? 7,
+    discord: config.discord,
   };
 }
 
@@ -90,6 +98,7 @@ export function loadCachedCards(): PRCard[] {
     archived: state.cards[pr.id]?.archived ?? false,
     order: state.cards[pr.id]?.order ?? pr.order,
     note: state.cards[pr.id]?.note,
+    firstSeenAt: state.cards[pr.id]?.firstSeenAt,
   }));
 }
 
@@ -120,20 +129,45 @@ export async function listPRs(force = false) {
 
   const automatedState = applyAutomation(state, cardSignals, config.rules);
 
-  const changed = JSON.stringify(automatedState) !== JSON.stringify(state);
+  // Stamp firstSeenAt on any newly-discovered card IDs, and prune cards that
+  // have disappeared from the fetch (PR closed/merged). Both are no-ops when
+  // nothing changed, so we don't write to localStorage on every refresh.
+  const cardIds = prs.map((p) => p.id);
+  const stamped = stampFirstSeen(automatedState, cardIds);
+  const pruned = pruneMissingCards(stamped, cardIds);
+
+  const changed = JSON.stringify(pruned) !== JSON.stringify(state);
   if (changed) {
-    await boardStore.save(automatedState);
+    await boardStore.save(pruned);
   }
 
   const cards = prs.map((pr) => ({
     ...pr,
-    columnId: getCardColumn(automatedState, pr.id),
-    archived: automatedState.cards[pr.id]?.archived ?? false,
-    order: automatedState.cards[pr.id]?.order ?? Date.now(),
-    note: automatedState.cards[pr.id]?.note,
+    columnId: getCardColumn(pruned, pr.id),
+    archived: pruned.cards[pr.id]?.archived ?? false,
+    order: pruned.cards[pr.id]?.order ?? Date.now(),
+    note: pruned.cards[pr.id]?.note,
+    firstSeenAt: pruned.cards[pr.id]?.firstSeenAt,
   }));
 
-  const orphans = findOrphanedCards(automatedState, config);
+  // Fire Discord pings for any cards that automation just moved into a
+  // watched column. We detect "just moved" by comparing old column vs new.
+  // Best-effort: never block the fetch result on a failing webhook.
+  if (config.discord && config.discord.notifyColumnIds.length > 0) {
+    const watchedSet = new Set(config.discord.notifyColumnIds);
+    const colById = new Map(config.columns.map((c) => [c.id, c]));
+    for (const card of cards) {
+      const prev = state.cards[card.id]?.column;
+      if (prev !== card.columnId && watchedSet.has(card.columnId)) {
+        const target = colById.get(card.columnId);
+        if (target) {
+          void notifyCardMoved(card, target, config.discord);
+        }
+      }
+    }
+  }
+
+  const orphans = findOrphanedCards(pruned, config);
 
   cacheCards(cards);
 
@@ -156,9 +190,28 @@ async function mutateBoard(fn: (state: BoardState) => BoardState): Promise<Board
   return updated;
 }
 
+export { notifyCardMoved } from "@review365/api/notifications/discord";
+export { sendTestMessage } from "@review365/api/notifications/discord";
+
 export const board = {
-  moveCard: (cardId: string, column: string) =>
-    mutateBoard((s) => setCardColumn(s, cardId, column as ColumnId)),
+  moveCard: async (cardId: string, column: string): Promise<{ notified: boolean }> => {
+    const updated = await mutateBoard((s) => setCardColumn(s, cardId, column as ColumnId));
+
+    // Fire Discord ping if configured for this column. Best-effort, never throws.
+    let notified = false;
+    try {
+      const config = await configStore.load();
+      const cardsRaw = loadCachedCardsRaw() ?? [];
+      const card = cardsRaw.find((c) => c.id === cardId);
+      const targetCol = (await configStore.load()).columns.find((c) => c.id === column);
+      if (card && targetCol) {
+        notified = await notifyCardMoved(card, targetCol, config.discord);
+      }
+    } catch {
+      // ignore — never break the move
+    }
+    return { notified };
+  },
   toggleRepo: (repo: string) => mutateBoard((s) => toggleRepo(s, repo)),
   reorderCard: (cardId: string, targetCardId: string | null, column: string) =>
     mutateBoard((s) => reorderCard(s, cardId, targetCardId, column as ColumnId)),
@@ -186,4 +239,12 @@ export const config = {
   setRetention: (days: number) =>
     mutateConfig((c) => ({ ...c, mergedRetentionDays: Math.min(90, Math.max(1, days)) })),
   setColumnWidth: (px: number) => mutateConfig((c) => setColumnWidth(c, px)),
+  setSla: (warningDays: number, criticalDays: number) =>
+    mutateConfig((c) => ({
+      ...c,
+      slaWarningDays: Math.min(30, Math.max(1, warningDays)),
+      slaCriticalDays: Math.min(90, Math.max(warningDays + 1, criticalDays)),
+    })),
+  setDiscord: (discord: DiscordConfig) => mutateConfig((c) => setDiscord(c, discord)),
+  clearDiscord: () => mutateConfig((c) => clearDiscord(c)),
 };
