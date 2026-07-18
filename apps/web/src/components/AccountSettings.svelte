@@ -1,17 +1,21 @@
 <script lang="ts">
 	import { clearToken } from '$lib/auth';
 	import { exportData, importData } from '$lib/backup';
-	import type { Platform } from '@review365/api/types';
+	import { loadBoardConfig } from '$lib/local-store';
+	import type { Platform, ColumnDef, DiscordConfig } from '@review365/api/types';
+	import DiscordSettings from './DiscordSettings.svelte';
 
 	let {
 		platform,
 		login,
+		columns = [],
 		onSignOut,
 		onImported,
 		onSwitchPlatform
 	}: {
 		platform: Platform;
 		login: string | null;
+		columns?: ColumnDef[];
 		onSignOut: () => void;
 		onImported: () => void;
 		onSwitchPlatform: (platform: Platform) => void;
@@ -19,8 +23,13 @@
 
 	let importStatus = $state('');
 	let fileInput: HTMLInputElement | undefined = $state();
+	let discordCfg = $state<DiscordConfig | undefined>(loadBoardConfig().discord);
 
 	const platformLabel: Record<Platform, string> = { github: 'GitHub', gitlab: 'GitLab' };
+
+	function refreshDiscord() {
+		discordCfg = loadBoardConfig().discord;
+	}
 
 	async function handleExport() {
 		const json = await exportData();
@@ -110,3 +119,9 @@
 		machines. Exports never include your token.
 	</p>
 </div>
+
+{#if columns.length > 0}
+	<div class="mt-4">
+		<DiscordSettings {columns} current={discordCfg} onSaved={refreshDiscord} />
+	</div>
+{/if}

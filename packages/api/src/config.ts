@@ -1,4 +1,4 @@
-import type { BoardConfig, AutomationRule, Signal } from "./types";
+import type { BoardConfig, AutomationRule, Signal, DiscordConfig } from "./types";
 import { DEFAULT_CONFIG } from "./types";
 
 export type { BoardConfig };
@@ -62,4 +62,21 @@ export function setColumnWidth(config: BoardConfig, px: number): BoardConfig {
     ...config,
     columnWidthPx: Math.min(800, Math.max(200, px)),
   };
+}
+
+/** Replace the entire Discord integration config. Pass empty webhookUrl to disable. */
+export function setDiscord(config: BoardConfig, discord: DiscordConfig): BoardConfig {
+  const webhookUrl = discord.webhookUrl.trim();
+  return {
+    ...config,
+    discord: webhookUrl ? { ...discord, webhookUrl } : undefined,
+  };
+}
+
+/** Disable Discord notifications entirely. */
+export function clearDiscord(config: BoardConfig): BoardConfig {
+  if (!config.discord) return config;
+  const next = { ...config };
+  delete next.discord;
+  return next;
 }

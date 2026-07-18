@@ -9,6 +9,8 @@ import {
   deleteRule,
   createDefaultConfig,
   setColumnWidth,
+  setDiscord,
+  clearDiscord,
 } from "./config";
 
 function emptyConfig(): BoardConfig {
@@ -163,5 +165,66 @@ describe("setColumnWidth", () => {
     expect(setColumnWidth(config, 150).columnWidthPx).toBe(200);
     expect(setColumnWidth(config, 500).columnWidthPx).toBe(500);
     expect(setColumnWidth(config, 900).columnWidthPx).toBe(800);
+  });
+});
+
+// ── Discord config ──
+
+describe("setDiscord", () => {
+  it("stores webhook URL and column ids", () => {
+    const config = emptyConfig();
+    const result = setDiscord(config, {
+      webhookUrl: "https://discord.com/api/webhooks/abc",
+      notifyColumnIds: ["approved"],
+    });
+    expect(result.discord?.webhookUrl).toBe("https://discord.com/api/webhooks/abc");
+    expect(result.discord?.notifyColumnIds).toEqual(["approved"]);
+  });
+
+  it("trims whitespace in webhook URL", () => {
+    const result = setDiscord(emptyConfig(), {
+      webhookUrl: "  https://discord.com/api/webhooks/xyz  ",
+      notifyColumnIds: [],
+    });
+    expect(result.discord?.webhookUrl).toBe("https://discord.com/api/webhooks/xyz");
+  });
+
+  it("disables (sets undefined) when webhook URL is empty", () => {
+    const config: BoardConfig = {
+      ...emptyConfig(),
+      discord: { webhookUrl: "https://discord.com/api/webhooks/old", notifyColumnIds: ["x"] },
+    };
+    const result = setDiscord(config, { webhookUrl: "   ", notifyColumnIds: [] });
+    expect(result.discord).toBeUndefined();
+  });
+
+  it("preserves other config fields", () => {
+    const config: BoardConfig = {
+      ...emptyConfig(),
+      mergedRetentionDays: 21,
+      slaWarningDays: 5,
+    };
+    const result = setDiscord(config, {
+      webhookUrl: "https://discord.com/api/webhooks/abc",
+      notifyColumnIds: [],
+    });
+    expect(result.mergedRetentionDays).toBe(21);
+    expect(result.slaWarningDays).toBe(5);
+  });
+});
+
+describe("clearDiscord", () => {
+  it("removes the discord field entirely", () => {
+    const config: BoardConfig = {
+      ...emptyConfig(),
+      discord: { webhookUrl: "https://discord.com/api/webhooks/abc", notifyColumnIds: [] },
+    };
+    const result = clearDiscord(config);
+    expect(result.discord).toBeUndefined();
+  });
+
+  it("returns same reference when already absent", () => {
+    const config = emptyConfig();
+    expect(clearDiscord(config)).toBe(config);
   });
 });
