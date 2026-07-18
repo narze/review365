@@ -10,12 +10,15 @@
     "prepare": "svelte-kit sync || echo ''",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "pages:dev": "vp build && wrangler pages dev build",
+    "pages:deploy": "vp build && wrangler pages deploy build --project-name review365"
   },
   "dependencies": {
     "@review365/api": "workspace:*"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260714.1",
     "@review365/config": "workspace:*",
     "@sveltejs/adapter-static": "^3.0.8",
     "@sveltejs/kit": "^2.58.0",
@@ -25,6 +28,7 @@
     "svelte-check": "^4.4.6",
     "tailwindcss": "^4.3.1",
     "typescript": "catalog:",
-    "vite": "^8.0.10"
+    "vite": "^8.0.10",
+    "wrangler": "^4.110.0"
   }
 }

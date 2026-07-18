@@ -2,6 +2,7 @@
 
 Review365 is mostly a static SPA. GitHub OAuth still needs a tiny server to hold
 `GITHUB_CLIENT_SECRET` and exchange the authorization code for an access token.
+On Cloudflare Pages, that server is two Pages Functions in `apps/web/functions/`.
 
 ## Register the right app type
 
@@ -59,20 +60,62 @@ org policy allow access.
 
 ## Local development
 
+Two options — pick based on what you need to test:
+
+### Option A — Fast SPA dev (Vite middleware)
+
+Use when iterating on UI/board logic. The OAuth routes are served by a Vite
+plugin (`apps/web/vite-plugin-github-oauth.ts`) that mimics the production flow
+against your local `.env`. No build step, hot reload.
+
 1. Create a GitHub OAuth App (Settings → Developer settings → OAuth Apps)
 2. Homepage URL: `http://localhost:5173`
 3. Authorization callback URL: `http://localhost:5173/api/auth/github/callback`
 4. Copy `.env.example` → `.env` and set `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET`
 5. Optionally set `APP_ORIGIN=http://localhost:5173`
-6. `bun run dev` — Vite middleware serves the same `/api/auth/github/*` routes
+6. `bun run dev`
 
-## Production (Vercel)
+### Option B — Full Cloudflare runtime locally
 
-Vercel **Root Directory** is `apps/web` (matches this project's dashboard setting).
-OAuth handlers live at `apps/web/api/auth/github/` and deploy as Edge Functions
-alongside the static site. Shared helpers: `apps/web/api/_lib/github-oauth.ts`.
-Config: `apps/web/vercel.json` (`cleanUrls` so `/settings/oauth` serves
-`settings/oauth.html`; SPA rewrite for other client routes; `/api/*` excluded).
+Use when you need to test the actual Pages Functions (`/api/auth/github/*`)
+exactly as they run in production.
 
-Set `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` in the project env.
-Callback URL: `https://<your-domain>/api/auth/github/callback`
+1. Same GitHub OAuth App setup as Option A
+2. Create `apps/web/.dev.vars` (gitignored) with:
+   ```
+   GITHUB_CLIENT_ID=Ov…
+   GITHUB_CLIENT_SECRET=…
+   ```
+3. `bun run pages:dev` (= `vp build && wrangler pages dev build`)
+4. Open the URL wrangler prints (usually `http://localhost:8788`)
+5. Update the OAuth App callback URL to match if it differs from 5173
+
+## Production (Cloudflare Pages)
+
+OAuth handlers live at `apps/web/functions/api/auth/github/` and deploy as
+Cloudflare Pages Functions alongside the static site. Shared helpers:
+`apps/web/api/_lib/github-oauth.ts`. Config: `apps/web/wrangler.toml`.
+
+Origin resolution order (in `getAppOrigin()`):
+1. `APP_ORIGIN` — explicit override (wins everywhere)
+2. `CF_PAGES_URL` — auto-injected by Cloudflare Pages (prod + preview)
+3. request origin — fallback
+
+### Deploy
+
+```bash
+# One-time
+bunx wrangler pages project create review365
+bunx wrangler pages secret put GITHUB_CLIENT_ID     --project-name review365
+bunx wrangler pages secret put GITHUB_CLIENT_SECRET --project-name review365
+
+# Every release
+bun run pages:deploy
+```
+
+Or connect the repo in the Cloudflare dashboard for git-push deploys.
+
+### Callback URL
+
+`https://<your-domain>/api/auth/github/callback` — set this in your GitHub OAuth
+App under Developer settings.

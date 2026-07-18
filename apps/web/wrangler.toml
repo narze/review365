@@ -1,0 +1,26 @@
+# Cloudflare Pages configuration for Review365.
+# Docs: https://developers.cloudflare.com/pages/functions/wrangler-configuration/
+#
+# Quick start:
+#   bun install
+#   bun run build            # builds SvelteKit static output to apps/web/build
+#   bunx wrangler pages deploy build --project-name review365
+#
+# Local dev with real Pages Functions:
+#   bun run build
+#   bunx wrangler pages dev build
+#
+# Secrets (do NOT commit — use wrangler or the dashboard):
+#   bunx wrangler pages secret put GITHUB_CLIENT_ID   --project-name review365
+#   bunx wrangler pages secret put GITHUB_CLIENT_SECRET --project-name review365
+
+name = "review365"
+compatibility_date = "2024-11-01"
+pages_build_output_dir = "./build"
+
+# Plaintext env vars (not secret). APP_ORIGIN forces a stable redirect_uri so
+# the GitHub OAuth App's registered callback URL doesn't break on every deploy
+# (Cloudflare gives each deployment a unique hash subdomain like 4dabb43d.review365.pages.dev).
+# If you add a custom domain, change this to your domain.
+[vars]
+APP_ORIGIN = "https://review365.pages.dev"

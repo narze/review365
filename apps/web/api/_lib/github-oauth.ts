@@ -1,4 +1,13 @@
-/** Shared GitHub OAuth helpers for Vercel functions and Vite dev middleware. */
+/**
+ * Shared GitHub OAuth helpers.
+ *
+ * Used by:
+ *   - Cloudflare Pages Functions (apps/web/functions/api/auth/github/*)
+ *   - Vite dev middleware (apps/web/vite-plugin-github-oauth.ts)
+ *
+ * All helpers are platform-agnostic: any env access takes `env` as an explicit
+ * parameter — no `process.env` reads inside the module.
+ */
 
 export const GITHUB_OAUTH_SCOPES = "repo read:org";
 export const STATE_COOKIE = "review365_gh_oauth_state";
@@ -15,6 +24,12 @@ export type OAuthConfig = {
   configured: boolean;
 };
 
+/**
+ * Read GitHub OAuth credentials from env.
+ *
+ * `env` defaults to `process.env` for Node/Vite contexts. Cloudflare Pages
+ * Functions MUST pass `context.env` explicitly (Workers don't expose process.env).
+ */
 export function getOAuthConfig(
   env: Record<string, string | undefined> = process.env,
 ): OAuthConfig {
@@ -27,13 +42,24 @@ export function getOAuthConfig(
   };
 }
 
-/** Public origin for redirect_uri (no trailing slash). */
+/**
+ * Public origin for redirect_uri (no trailing slash).
+ *
+ * Resolution order:
+ *   1. `APP_ORIGIN` / `PUBLIC_APP_ORIGIN` (explicit override — wins everywhere)
+ *   2. `CF_PAGES_URL` (Cloudflare Pages production + preview deployments)
+ *   3. `VERCEL_URL` (Vercel preview deployments — kept for back-compat)
+ *   4. request origin (local dev fallback)
+ */
 export function getAppOrigin(
   requestUrl: URL,
   env: Record<string, string | undefined> = process.env,
 ): string {
   const configured = env.APP_ORIGIN?.trim() || env.PUBLIC_APP_ORIGIN?.trim();
   if (configured) return configured.replace(/\/+$/, "");
+
+  const cfPages = env.CF_PAGES_URL?.trim();
+  if (cfPages) return cfPages.replace(/\/+$/, "");
 
   const vercel = env.VERCEL_URL?.trim();
   if (vercel) {

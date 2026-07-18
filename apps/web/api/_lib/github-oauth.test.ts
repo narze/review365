@@ -20,15 +20,28 @@ describe("github-oauth helpers", () => {
     ).toBe(true);
   });
 
-  test("getAppOrigin prefers APP_ORIGIN then VERCEL_URL then request origin", () => {
+  test("getAppOrigin prefers APP_ORIGIN then CF_PAGES_URL then VERCEL_URL then request origin", () => {
     const req = new URL("http://localhost:5173/api/auth/github/start");
     expect(getAppOrigin(req, { APP_ORIGIN: "https://app.example/" })).toBe(
       "https://app.example",
+    );
+    expect(getAppOrigin(req, { CF_PAGES_URL: "https://review365.pages.dev/" })).toBe(
+      "https://review365.pages.dev",
     );
     expect(getAppOrigin(req, { VERCEL_URL: "review365.vercel.app" })).toBe(
       "https://review365.vercel.app",
     );
     expect(getAppOrigin(req, {})).toBe("http://localhost:5173");
+  });
+
+  test("getAppOrigin APP_ORIGIN wins over CF_PAGES_URL", () => {
+    const req = new URL("http://localhost:5173/api/auth/github/start");
+    expect(
+      getAppOrigin(req, {
+        APP_ORIGIN: "https://custom.example",
+        CF_PAGES_URL: "https://review365.pages.dev",
+      }),
+    ).toBe("https://custom.example");
   });
 
   test("buildAuthorizeUrl includes scopes and state", () => {

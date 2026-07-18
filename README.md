@@ -32,6 +32,48 @@ Optional. Copy `.env.example` to `.env` and set `GITHUB_CLIENT_ID` / `GITHUB_CLI
 from a [GitHub OAuth App](https://github.com/settings/developers). Callback URL:
 `http://localhost:5173/api/auth/github/callback`. See [docs/github-oauth.md](docs/github-oauth.md).
 
+## Deploy (Cloudflare Pages)
+
+Review365 ships as a static SPA (`@sveltejs/adapter-static`) plus two Cloudflare
+Pages Functions for the OAuth exchange (`/api/auth/github/*`).
+
+### One-time setup
+
+1. Create the project on Cloudflare:
+   ```bash
+   bunx wrangler pages project create review365
+   ```
+2. Set OAuth secrets (do **not** commit them):
+   ```bash
+   bunx wrangler pages secret put GITHUB_CLIENT_ID     --project-name review365
+   bunx wrangler pages secret put GITHUB_CLIENT_SECRET --project-name review365
+   ```
+3. Update your GitHub OAuth App callback URL to:
+   `https://<your-project>.pages.dev/api/auth/github/callback`
+   (or your custom domain)
+
+### Deploy from local
+
+```bash
+bun run pages:deploy    # = vp build && wrangler pages deploy build
+```
+
+### CI/CD
+
+The simplest path is to connect the GitHub repo in the Cloudflare Pages dashboard
+(`Create application → Pages → Connect to Git`). Set build:
+
+- **Framework preset**: None
+- **Build command**: `bun run build`
+- **Build output directory**: `apps/web/build`
+- **Root directory**: (repo root)
+
+Cloudflare will auto-build on every push. Add `GITHUB_CLIENT_ID` and
+`GITHUB_CLIENT_SECRET` under **Settings → Environment variables**.
+
+See [docs/github-oauth.md](docs/github-oauth.md) for the full flow, scopes, and
+private-org troubleshooting.
+
 ## Git Hooks and Formatting
 
 - Optional native Vite+ hooks: `bun run hooks:setup`

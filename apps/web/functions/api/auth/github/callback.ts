@@ -1,3 +1,16 @@
+/**
+ * Cloudflare Pages Function — `/api/auth/github/callback`
+ *
+ * OAuth callback handler:
+ *   1. Verify `state` matches the HttpOnly cookie set by /start
+ *   2. Exchange the GitHub `code` for an access token (server-side fetch)
+ *   3. 302 redirect to `/settings/oauth#access_token=…` (hash fragment so the
+ *      token never reaches the server in the next request's Referer header)
+ *
+ * File-path mapping (Cloudflare Pages convention):
+ *   apps/web/functions/api/auth/github/callback.ts → /api/auth/github/callback
+ */
+
 import {
   callbackRedirectUri,
   exchangeCodeForToken,
@@ -8,13 +21,19 @@ import {
   readCookie,
   STATE_COOKIE,
   stateCookieHeader,
-} from "../../_lib/github-oauth.js";
+} from "../../../../api/_lib/github-oauth";
 
-export const config = { runtime: "edge" };
+export interface Env {
+  GITHUB_CLIENT_ID: string;
+  GITHUB_CLIENT_SECRET: string;
+  APP_ORIGIN?: string;
+  /** Auto-injected by Cloudflare Pages (production + preview). */
+  CF_PAGES_URL?: string;
+}
 
-export default async function handler(request: Request): Promise<Response> {
+export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   const url = new URL(request.url);
-  const origin = getAppOrigin(url);
+  const origin = getAppOrigin(url, env);
   const secure = origin.startsWith("https://");
   const clearCookie = stateCookieHeader("", { secure, clear: true });
 
@@ -33,7 +52,7 @@ export default async function handler(request: Request): Promise<Response> {
     return redirect(oauthErrorRedirect(origin, oauthError));
   }
 
-  const { clientId, clientSecret, configured } = getOAuthConfig();
+  const { clientId, clientSecret, configured } = getOAuthConfig(env);
   if (!configured) {
     return redirect(oauthErrorRedirect(origin, "oauth_not_configured"));
   }
@@ -54,4 +73,4 @@ export default async function handler(request: Request): Promise<Response> {
   }
 
   return redirect(oauthSuccessRedirect(origin, result.accessToken));
-}
+};
