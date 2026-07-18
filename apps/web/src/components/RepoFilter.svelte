@@ -22,11 +22,6 @@
 	}
 
 	async function runSearch(q: string) {
-		if (!q.trim()) {
-			searchResults = [];
-			searching = false;
-			return;
-		}
 		try {
 			searchResults = await searchRepos(q.trim());
 		} catch {
@@ -44,9 +39,14 @@
 
 	function toggleDropdown() {
 		open = !open;
+		if (open && searchResults.length === 0 && !searching) {
+			// First open: show all accessible repos immediately so the user
+			// doesn't see an empty list and think nothing was fetched.
+			searching = true;
+			runSearch('');
+		}
 		if (!open) {
 			query = '';
-			searchResults = [];
 		}
 	}
 

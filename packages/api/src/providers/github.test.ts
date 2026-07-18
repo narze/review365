@@ -73,10 +73,46 @@ describe("github fetchOwnedRepos", () => {
     expect(repos).toEqual(["alice/My-Repo"]);
   });
 
-  it("returns empty list for blank query", async () => {
-    mockFetch([]);
+  it("returns all accessible repos for blank query (open-dropdown UX)", async () => {
+    mockFetch([
+      { match: "/users/alice/orgs", body: [] },
+      {
+        match: "/user/repos",
+        body: [
+          { full_name: "alice/a", archived: false },
+          { full_name: "alice/b", archived: false },
+        ],
+      },
+    ]);
     const repos = await githubProvider.fetchOwnedRepos(ctx(), "   ");
-    expect(repos).toEqual([]);
+    expect(repos).toEqual(["alice/a", "alice/b"]);
+  });
+
+  it("includes a manual owner/repo entry even when not in accessible list", async () => {
+    mockFetch([
+      { match: "/users/alice/orgs", body: [] },
+      {
+        match: "/user/repos",
+        body: [{ full_name: "alice/My-Repo", archived: false }],
+      },
+    ]);
+    const repos = await githubProvider.fetchOwnedRepos(ctx(), "bob/upstream");
+    // The literal query is returned even though it isn't in the accessible list.
+    // Other accessible repos only appear if their name contains the query string.
+    expect(repos).toEqual(["bob/upstream"]);
+  });
+
+  it("returns accessible repo plus manual entry when both match owner/repo pattern", async () => {
+    mockFetch([
+      { match: "/users/alice/orgs", body: [] },
+      {
+        match: "/user/repos",
+        body: [{ full_name: "alice/contrib-repo", archived: false }],
+      },
+    ]);
+    // Query matches the accessible repo by substring → both included
+    const repos = await githubProvider.fetchOwnedRepos(ctx(), "alice/contrib-repo");
+    expect(repos).toContain("alice/contrib-repo");
   });
 
   it("continues when an org repo listing is forbidden", async () => {

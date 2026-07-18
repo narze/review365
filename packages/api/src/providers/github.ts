@@ -304,11 +304,26 @@ async function fetchAccessibleRepoNames(token: string, user: string): Promise<st
 
 async function fetchOwnedRepos(ctx: ProviderContext, query: string): Promise<string[]> {
   const { token, user } = ctx;
-  const q = query.trim().toLowerCase();
-  if (!q) return [];
+  const q = query.trim();
 
+  // Empty query = "show me everything I have access to". The provider layer
+  // caches the accessible-repos list for 5 minutes, so opening the dropdown
+  // repeatedly does not re-hit GitHub.
   const all = await fetchAccessibleRepoNames(token, user);
-  return all.filter((name) => name.toLowerCase().includes(q));
+
+  // Manual entry shortcut: any "owner/repo" string is valid even if the user
+  // isn't an explicit collaborator (e.g. contributed a PR, public OSS repo).
+  const looksLikeOwnerRepo = /^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/.test(q);
+
+  if (!q) return all;
+
+  const filtered = all.filter((name) => name.toLowerCase().includes(q.toLowerCase()));
+
+  if (looksLikeOwnerRepo && !filtered.some((r) => r.toLowerCase() === q.toLowerCase())) {
+    filtered.unshift(q);
+  }
+
+  return filtered;
 }
 
 async function validateToken(token: string): Promise<{ user: string }> {
