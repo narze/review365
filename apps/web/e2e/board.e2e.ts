@@ -559,6 +559,49 @@ test.describe("Review365", () => {
       );
   });
 
+  test("text filter: narrows cards by title, author, and PR number", async ({ page }) => {
+    await seedAuth(page, { enabledRepos: [REPO] });
+    await mockGitHub(page, {
+      open: [
+        ghItem(1, "Add login page", { author: "alice" }),
+        ghItem(2, "Fix logout bug", { author: "bob" }),
+      ],
+    });
+    await page.goto("/", { waitUntil: "networkidle" });
+
+    await expect(page.getByText("Add login page")).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText("Fix logout bug")).toBeVisible();
+
+    const filter = page.getByRole("searchbox", { name: "Filter cards by text" });
+
+    // Title match keeps only the login card.
+    await filter.fill("login");
+    await expect(page.getByText("Add login page")).toBeVisible();
+    await expect(page.getByText("Fix logout bug")).toBeHidden();
+    await expect(page.getByText(/1 of 2 PRs match/)).toBeVisible();
+
+    // Author match keeps only bob's card.
+    await filter.fill("bob");
+    await expect(page.getByText("Fix logout bug")).toBeVisible();
+    await expect(page.getByText("Add login page")).toBeHidden();
+
+    // PR number match (with a leading #) keeps only PR 1.
+    await filter.fill("#1");
+    await expect(page.getByText("Add login page")).toBeVisible();
+    await expect(page.getByText("Fix logout bug")).toBeHidden();
+
+    // A query that matches nothing shows the empty-state hint.
+    await filter.fill("zzznomatch");
+    await expect(page.getByText(/No cards match/)).toBeVisible();
+    await expect(page.getByText("Add login page")).toBeHidden();
+
+    // Clearing via the search box's ✕ restores every card.
+    await filter.locator("xpath=following-sibling::button").click();
+    await expect(filter).toHaveValue("");
+    await expect(page.getByText("Add login page")).toBeVisible();
+    await expect(page.getByText("Fix logout bug")).toBeVisible();
+  });
+
   test("export excludes token, import restores board", async ({ page }) => {
     await seedAuth(page, { enabledRepos: [REPO] });
     await mockGitHub(page);
