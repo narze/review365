@@ -11,6 +11,7 @@
 	import { tick } from 'svelte';
 	import { getTheme, setTheme, type Theme } from '$lib/theme';
 	import { nextCardId, columnEdgeId, type Dir } from '$lib/card-navigation';
+	import { cardMatchesQuery } from '$lib/card-filter';
 	import type { ActivityEvent } from '$lib/activity';
 
 	let {
@@ -89,6 +90,7 @@
 	let showActivity = $state(false);
 	let theme = $state<Theme>(getTheme());
 	let showArchived = $state(false);
+	let searchQuery = $state('');
 	let refreshing = $state(false);
 	let ciPopover = $state<{ card: PRCard; anchor: DOMRect } | null>(null);
 	let ciCloseTimer: ReturnType<typeof setTimeout> | undefined;
@@ -202,8 +204,18 @@
 		})()
 	);
 
-	const filteredCards = $derived(
+	// Cards in the watchlist, before the text filter — the denominator for "X of Y".
+	const watchedCards = $derived(
 		enabledRepos.length === 0 ? [] : cards.filter((c) => enabledRepos.includes(c.repo))
+	);
+
+	const query = $derived(searchQuery.trim());
+
+	// The text filter narrows the watched cards further. Everything downstream
+	// (columns, orphans, archived count, keyboard nav) reads from filteredCards,
+	// so the search applies board-wide from this one place.
+	const filteredCards = $derived(
+		query ? watchedCards.filter((c) => cardMatchesQuery(c, query)) : watchedCards
 	);
 
 	const archivedCount = $derived(filteredCards.filter((c) => c.archived).length);
@@ -452,7 +464,7 @@
 <div class="flex flex-wrap items-center gap-2 border-b border-panel px-3 py-3 sm:gap-3 sm:px-6">
 	<h1 class="order-1 text-lg font-bold text-heading sm:text-xl">Review365</h1>
 
-	<div class="order-2 ml-auto flex gap-2 sm:order-5">
+	<div class="order-2 ml-auto flex gap-2 sm:order-6">
 		<button
 			class="btn-secondary relative px-2.5 py-1.5 text-sm text-heading sm:px-3 {showActivity ? 'border-blue-500' : ''}"
 			onclick={openActivity}
@@ -486,15 +498,43 @@
 		<RepoFilter {enabledRepos} {repoCounts} onToggle={onToggleRepo} />
 	</div>
 
-	<span class="order-4 w-full text-sm text-muted sm:order-3 sm:w-auto">
-		{enabledRepos.length === 0
-			? 'Select repos to view →'
-			: `${filteredCards.length} of ${cards.length} PRs across ${columns.length} columns`}
+	<div class="relative order-4 sm:order-3">
+		<span class="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-muted">
+			🔍
+		</span>
+		<input
+			type="search"
+			class="input-field w-40 py-1.5 pl-8 pr-7 sm:w-56"
+			placeholder="Filter cards..."
+			value={searchQuery}
+			oninput={(e) => (searchQuery = (e.target as HTMLInputElement).value)}
+			aria-label="Filter cards by text"
+		/>
+		{#if query}
+			<button
+				type="button"
+				class="absolute right-1 top-1/2 -translate-y-1/2 rounded px-1 text-muted hover:text-heading"
+				onclick={() => (searchQuery = '')}
+				aria-label="Clear filter"
+			>
+				✕
+			</button>
+		{/if}
+	</div>
+
+	<span class="order-5 w-full text-sm text-muted sm:order-4 sm:w-auto">
+		{#if enabledRepos.length === 0}
+			Select repos to view →
+		{:else if query}
+			{filteredCards.length} of {watchedCards.length} PRs match “{query}”
+		{:else}
+			{filteredCards.length} of {cards.length} PRs across {columns.length} columns
+		{/if}
 	</span>
 
 	{#if archivedCount > 0}
 		<button
-			class="btn-secondary order-5 px-2.5 py-1 text-xs sm:order-4 {showArchived ? 'border-blue-500' : ''}"
+			class="btn-secondary order-6 px-2.5 py-1 text-xs sm:order-5 {showArchived ? 'border-blue-500' : ''}"
 			onclick={() => (showArchived = !showArchived)}
 		>
 			📦 {archivedCount} archived {showArchived ? '(showing)' : '(hidden)'}
@@ -505,6 +545,15 @@
 {#if !online}
 	<div class="border-b border-amber-900/50 bg-amber-950/40 px-6 py-1.5 text-xs text-amber-400">
 		📡 Offline — showing the last cards loaded. Reconnect to refresh.
+	</div>
+{/if}
+
+{#if enabledRepos.length > 0 && query && filteredCards.length === 0}
+	<div class="flex items-center gap-2 border-b border-panel px-6 py-1.5 text-xs text-muted">
+		<span>🔍 No cards match “{query}”.</span>
+		<button type="button" class="text-blue-500 hover:underline" onclick={() => (searchQuery = '')}>
+			Clear filter
+		</button>
 	</div>
 {/if}
 
