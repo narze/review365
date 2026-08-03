@@ -504,7 +504,7 @@
 		</span>
 		<input
 			type="search"
-			class="input-field w-40 py-1.5 pl-8 pr-7 sm:w-56"
+			class="input-field w-40 py-1.5 pl-8 pr-7 sm:w-56 [&::-webkit-search-cancel-button]:hidden"
 			placeholder="Filter cards..."
 			value={searchQuery}
 			oninput={(e) => (searchQuery = (e.target as HTMLInputElement).value)}
