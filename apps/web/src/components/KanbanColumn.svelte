@@ -4,6 +4,12 @@
 	import type { PRCard, ColumnId, ColumnDef } from '@review365/api/types';
 	import KanbanCard from './KanbanCard.svelte';
 	import { cardDrag } from '$lib/drag-state.svelte';
+	// PROTOTYPE — column header menu variants (?variant=). Throwaway; see
+	// $lib/prototype-variant.svelte.ts. Variant '0' is the current header below.
+	import { prototypeVariant } from '$lib/prototype-variant.svelte';
+	import ColumnHeaderA from './prototype/ColumnHeaderA.svelte';
+	import ColumnHeaderB from './prototype/ColumnHeaderB.svelte';
+	import ColumnHeaderC from './prototype/ColumnHeaderC.svelte';
 
 	type SortMode = 'default' | 'pr-asc' | 'pr-desc' | 'age-asc' | 'age-desc';
 
@@ -189,6 +195,40 @@
 	ondragleave={handleColumnDragLeave}
 	ondrop={handleColumnDrop}
 >
+	{#if prototypeVariant.key === 'A'}
+		<ColumnHeaderA
+			{col}
+			count={visibleCards.length}
+			{sortMode}
+			{onSort}
+			onCopy={copyVisibleCards}
+			{copyStatus}
+			{onColumnDragStart}
+			{onColumnDragEnd}
+		/>
+	{:else if prototypeVariant.key === 'B'}
+		<ColumnHeaderB
+			{col}
+			count={visibleCards.length}
+			{sortMode}
+			{onSort}
+			onCopy={copyVisibleCards}
+			{copyStatus}
+			{onColumnDragStart}
+			{onColumnDragEnd}
+		/>
+	{:else if prototypeVariant.key === 'C'}
+		<ColumnHeaderC
+			{col}
+			count={visibleCards.length}
+			{sortMode}
+			{onSort}
+			onCopy={copyVisibleCards}
+			{copyStatus}
+			{onColumnDragStart}
+			{onColumnDragEnd}
+		/>
+	{:else}
 	<div class="flex items-center justify-between border-b border-panel px-4 py-3">
 		<span class="text-sm font-semibold text-heading">{col.title}</span>
 		<span class="flex items-center gap-2">
@@ -301,6 +341,7 @@
 			{/if}
 		</span>
 	</div>
+	{/if}
 	<div class="thin-scrollbar column-body flex flex-1 flex-col gap-2 overflow-y-auto p-2">
 		{#each visibleCards as card (card.id)}
 			<div role="listitem" animate:flip={{ duration: 300 }}>
