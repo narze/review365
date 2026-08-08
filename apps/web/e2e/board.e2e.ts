@@ -548,8 +548,8 @@ test.describe("Review365", () => {
 
     await page.goto("/", { waitUntil: "networkidle" });
     const inboxColumn = page.getByRole("region", { name: "📥 Inbox" });
-    await inboxColumn.getByRole("button", { name: "Column actions" }).click();
-    await inboxColumn.getByRole("button", { name: "Copy list" }).click();
+    await inboxColumn.getByRole("button", { name: "📥 Inbox column options" }).click();
+    await inboxColumn.getByRole("button", { name: /Copy list/ }).click();
 
     await expect
       .poll(() => page.evaluate(() => navigator.clipboard.readText()))
@@ -557,6 +557,47 @@ test.describe("Review365", () => {
         "- [test/repo#1](https://github.com/test/repo/pull/1) - First PR\n" +
           "- [test/repo#2](https://github.com/test/repo/pull/2) - Second PR",
       );
+    // The panel closes after the action and the header reports what happened.
+    await expect(inboxColumn.getByRole("dialog")).toBeHidden();
+    await expect(inboxColumn.getByText("Copied 2 cards as Markdown")).toBeVisible();
+  });
+
+  test("column options: sorting stays open so sorts can be compared", async ({ page }) => {
+    await seedAuth(page, { enabledRepos: [REPO] });
+    await mockGitHub(page, {
+      open: [ghItem(1, "First PR"), ghItem(2, "Second PR"), ghItem(3, "Third PR")],
+    });
+
+    await page.goto("/", { waitUntil: "networkidle" });
+    const inboxColumn = page.getByRole("region", { name: "📥 Inbox" });
+    const orderOf = () =>
+      inboxColumn
+        .locator("[data-card-id]")
+        .evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.cardId ?? null));
+
+    await expect.poll(orderOf).toEqual(["pr_test_repo_1", "pr_test_repo_2", "pr_test_repo_3"]);
+
+    await inboxColumn.getByRole("button", { name: "📥 Inbox column options" }).click();
+    const panel = inboxColumn.getByRole("dialog");
+    await expect(panel).toBeVisible();
+
+    await panel.getByRole("button", { name: /PR number ↓/ }).click();
+    await expect.poll(orderOf).toEqual(["pr_test_repo_3", "pr_test_repo_2", "pr_test_repo_1"]);
+    // Still open: the point of the panel is trying sorts against the live column.
+    await expect(panel).toBeVisible();
+
+    await panel.getByRole("button", { name: /PR number ↑/ }).click();
+    await expect.poll(orderOf).toEqual(["pr_test_repo_1", "pr_test_repo_2", "pr_test_repo_3"]);
+
+    // Escape closes it, and the active sort stays readable in the header.
+    await page.keyboard.press("Escape");
+    await expect(panel).toBeHidden();
+    await expect(inboxColumn.getByText("Sorted by PR number ↑")).toBeVisible();
+
+    // Reset returns the column to drag order.
+    await inboxColumn.getByRole("button", { name: "📥 Inbox column options" }).click();
+    await panel.getByRole("button", { name: "Reset" }).click();
+    await expect(inboxColumn.getByText(/Sorted by/)).toBeHidden();
   });
 
   test("text filter: narrows cards by title, author, and PR number", async ({ page }) => {
