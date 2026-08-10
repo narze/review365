@@ -416,7 +416,7 @@ that mirrors the existing `columnSorts` map.
   view options aren't documented there today, skip this task rather than
   introducing new documentation scope.
 
-- [ ] **Step 2: Final check and push**
+- [x] **Step 2: Final check and push**
 
   ```bash
   bun run check
