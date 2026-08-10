@@ -600,6 +600,64 @@ test.describe("Review365", () => {
     await expect(inboxColumn.getByText(/Sorted by/)).toBeHidden();
   });
 
+  test("column options: group by repo clusters cards and can be turned off", async ({ page }) => {
+    const REPO2 = "test/other-repo";
+    await seedAuth(page, { enabledRepos: [REPO, REPO2] });
+    await mockGitHub(page, {
+      open: [ghItem(1, "Repo A first"), ghItem(2, "Repo A second")],
+    });
+    // A second, narrower route for REPO2 — registered after mockGitHub's
+    // catch-all, so Playwright matches it first without touching the shared
+    // helper (which only knows about REPO).
+    await page.route(`https://api.github.com/repos/${REPO2}/pulls*`, async (route) => {
+      await route.fulfill({
+        json: [
+          {
+            number: 1,
+            title: "Repo B first",
+            html_url: `https://github.com/${REPO2}/pull/1`,
+            updated_at: new Date().toISOString(),
+            user: { login: "someone" },
+            draft: false,
+            requested_reviewers: [],
+            head: { sha: "sha-other-1" },
+          },
+        ],
+      });
+    });
+
+    await page.goto("/", { waitUntil: "networkidle" });
+    const inboxColumn = page.getByRole("region", { name: "📥 Inbox" });
+    const orderOf = () =>
+      inboxColumn
+        .locator("[data-card-id]")
+        .evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.cardId ?? null));
+
+    await expect.poll(() => orderOf().then((ids) => ids.length)).toBe(3);
+
+    await inboxColumn.getByRole("button", { name: "📥 Inbox column options" }).click();
+    const panel = inboxColumn.getByRole("dialog");
+    await panel.getByRole("button", { name: "Group by repo" }).click();
+
+    // Cluster labels combine repo + count; plain repo text alone also
+    // appears inside every card, so match the combined label to stay strict.
+    await expect(inboxColumn.getByText(`${REPO} · 2`)).toBeVisible();
+    await expect(inboxColumn.getByText(`${REPO2} · 1`)).toBeVisible();
+    // Card ids: `pr_${repo.replaceAll("/", "_")}_${number}` (only `/` is
+    // replaced), so "test/other-repo" PR #1 is "pr_test_other-repo_1".
+    // "test/other-repo" sorts before "test/repo" ('o' < 'r').
+    await expect
+      .poll(orderOf)
+      .toEqual(["pr_test_other-repo_1", "pr_test_repo_1", "pr_test_repo_2"]);
+
+    await page.keyboard.press("Escape");
+    await expect(inboxColumn.getByText("Grouped by repo")).toBeVisible();
+
+    await inboxColumn.getByRole("button", { name: "📥 Inbox column options" }).click();
+    await panel.getByRole("button", { name: "Group by repo" }).click();
+    await expect(inboxColumn.getByText("Grouped by repo")).toBeHidden();
+  });
+
   test("text filter: narrows cards by title, author, and PR number", async ({ page }) => {
     await seedAuth(page, { enabledRepos: [REPO] });
     await mockGitHub(page, {
