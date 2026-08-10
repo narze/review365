@@ -65,7 +65,7 @@ active sort already does. Reuse that precedent exactly:
 - Apply grouping in `KanbanBoard.svelte`'s existing `cardsForColumn`, after
   the sort switch: sort first, then (if the column is grouped) run the
   result through `groupCardsByRepo`. This keeps `KanbanColumn.svelte`
-  agnostic of *how* order was produced — same contract sort already uses.
+  agnostic of _how_ order was produced — same contract sort already uses.
   Keyboard navigation (`nav.grid`) already reads from `cardsForColumn`, so it
   automatically follows the grouped/sorted order with no separate wiring.
 - Track grouped columns the same way `columnSorts` tracks sort mode: a

@@ -15,7 +15,7 @@ and keyboard navigation keep consuming a single pre-ordered `cards` array
 exactly as they do for sort today. Track grouped columns in a `Set<ColumnId>`
 that mirrors the existing `columnSorts` map.
 
-**Tech Stack:** Svelte 5, TypeScript, Tailwind utility classes, Playwright, Vitest.
+**Tech Stack:** Svelte 5, TypeScript, Tailwind utility classes, Playwright, `bun:test`.
 
 ## Global Constraints
 
@@ -46,28 +46,28 @@ that mirrors the existing `columnSorts` map.
 - [ ] **Step 1: Write the failing unit tests**
 
   ```ts
-  import { describe, expect, test } from "vitest";
+  import { describe, expect, it } from "bun:test";
   import { groupCardsByRepo } from "./card-grouping";
 
   type Fake = { id: string; repo: string };
   const c = (id: string, repo: string): Fake => ({ id, repo });
 
   describe("groupCardsByRepo", () => {
-    test("empty input stays empty", () => {
+    it("empty input stays empty", () => {
       expect(groupCardsByRepo([])).toEqual([]);
     });
 
-    test("a single repo is unaffected", () => {
+    it("a single repo is unaffected", () => {
       const cards = [c("1", "a/one"), c("2", "a/one")];
       expect(groupCardsByRepo(cards)).toEqual(cards);
     });
 
-    test("clusters interleaved repos, sorted alphabetically, order preserved within a cluster", () => {
+    it("clusters interleaved repos, sorted alphabetically, order preserved within a cluster", () => {
       const cards = [c("1", "b/repo"), c("2", "a/repo"), c("3", "b/repo"), c("4", "a/repo")];
       expect(groupCardsByRepo(cards).map((x) => x.id)).toEqual(["2", "4", "1", "3"]);
     });
 
-    test("does not mutate the input array", () => {
+    it("does not mutate the input array", () => {
       const cards = [c("1", "b/repo"), c("2", "a/repo")];
       const copy = [...cards];
       groupCardsByRepo(cards);
@@ -78,7 +78,7 @@ that mirrors the existing `columnSorts` map.
 
 - [ ] **Step 2: Run the focused test and verify it fails**
 
-  Run: `bunx vitest run apps/web/src/lib/card-grouping.test.ts`
+  Run: `bun test apps/web/src/lib/card-grouping.test.ts`
 
   Expected: FAIL — `card-grouping.ts` does not exist yet.
 
@@ -108,7 +108,7 @@ that mirrors the existing `columnSorts` map.
 
 - [ ] **Step 4: Run the focused test and verify it passes**
 
-  Run: `bunx vitest run apps/web/src/lib/card-grouping.test.ts`
+  Run: `bun test apps/web/src/lib/card-grouping.test.ts`
 
   Expected: PASS, all four cases.
 
@@ -243,10 +243,12 @@ that mirrors the existing `columnSorts` map.
     await mockGitHub(page, {
       open: [ghItem(1, "Repo A first"), ghItem(2, "Repo A second")],
     });
-    // A second, narrower route for REPO2 — registered after mockGitHub's
-    // catch-all, so Playwright matches it first without touching the shared
-    // helper (which only knows about REPO).
-    await page.route(`https://api.github.com/repos/${REPO2}/pulls`, async (route) => {
+    // A second, narrower route for REPO2, without touching the shared helper
+    // (which only knows about REPO). The trailing `*` matters: the real
+    // request carries a query string (`?state=open&per_page=100`), and an
+    // exact-string route pattern with no wildcard won't match it — it'll
+    // silently fall through to mockGitHub's catch-all and 404.
+    await page.route(`https://api.github.com/repos/${REPO2}/pulls*`, async (route) => {
       await route.fulfill({
         json: [
           {
@@ -276,15 +278,16 @@ that mirrors the existing `columnSorts` map.
     const panel = inboxColumn.getByRole("dialog");
     await panel.getByRole("button", { name: "Group by repo" }).click();
 
-    await expect(inboxColumn.getByText(REPO)).toBeVisible();
-    await expect(inboxColumn.getByText(REPO2)).toBeVisible();
+    // Cluster labels combine repo + count; plain repo text alone also
+    // appears inside every card, so match the combined label to stay strict.
+    await expect(inboxColumn.getByText(`${REPO} · 2`)).toBeVisible();
+    await expect(inboxColumn.getByText(`${REPO2} · 1`)).toBeVisible();
     // Card ids: `pr_${repo.replaceAll("/", "_")}_${number}` (only `/` is
     // replaced), so "test/other-repo" PR #1 is "pr_test_other-repo_1".
-    await expect.poll(orderOf).toEqual([
-      "pr_test_repo_1",
-      "pr_test_repo_2",
-      "pr_test_other-repo_1",
-    ]);
+    // "test/other-repo" sorts before "test/repo" ('o' < 'r').
+    await expect
+      .poll(orderOf)
+      .toEqual(["pr_test_other-repo_1", "pr_test_repo_1", "pr_test_repo_2"]);
 
     await page.keyboard.press("Escape");
     await expect(inboxColumn.getByText("Grouped by repo")).toBeVisible();
@@ -307,7 +310,7 @@ that mirrors the existing `columnSorts` map.
   let {
     // ...existing props
     grouped = false,
-    onToggleGroup = () => {}
+    onToggleGroup = () => {},
   }: {
     // ...existing prop types
     grouped?: boolean;
