@@ -43,7 +43,7 @@ that mirrors the existing `columnSorts` map.
   returns a new array clustered by `repo` (alphabetical by repo name),
   preserving each card's relative order within its cluster.
 
-- [ ] **Step 1: Write the failing unit tests**
+- [x] **Step 1: Write the failing unit tests**
 
   ```ts
   import { describe, expect, it } from "bun:test";
@@ -76,13 +76,13 @@ that mirrors the existing `columnSorts` map.
   });
   ```
 
-- [ ] **Step 2: Run the focused test and verify it fails**
+- [x] **Step 2: Run the focused test and verify it fails**
 
   Run: `bun test apps/web/src/lib/card-grouping.test.ts`
 
   Expected: FAIL — `card-grouping.ts` does not exist yet.
 
-- [ ] **Step 3: Implement the helper**
+- [x] **Step 3: Implement the helper**
 
   ```ts
   /**
@@ -106,13 +106,13 @@ that mirrors the existing `columnSorts` map.
   }
   ```
 
-- [ ] **Step 4: Run the focused test and verify it passes**
+- [x] **Step 4: Run the focused test and verify it passes**
 
   Run: `bun test apps/web/src/lib/card-grouping.test.ts`
 
   Expected: PASS, all four cases.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
   ```bash
   git add apps/web/src/lib/card-grouping.ts apps/web/src/lib/card-grouping.test.ts
@@ -134,7 +134,7 @@ that mirrors the existing `columnSorts` map.
   handler, and `grouped`/`onToggleGroup` props passed down to each real
   `KanbanColumn` (not the orphaned one).
 
-- [ ] **Step 1: Add grouped-column state next to `columnSorts`**
+- [x] **Step 1: Add grouped-column state next to `columnSorts`**
 
   ```ts
   let groupedColumns = $state<Set<ColumnId>>(new Set());
@@ -147,7 +147,7 @@ that mirrors the existing `columnSorts` map.
   }
   ```
 
-- [ ] **Step 2: Apply grouping in `cardsForColumn`, after the sort switch**
+- [x] **Step 2: Apply grouping in `cardsForColumn`, after the sort switch**
 
   Wrap the existing sorted result:
 
@@ -178,7 +178,7 @@ that mirrors the existing `columnSorts` map.
   }
   ```
 
-- [ ] **Step 3: Skip reorder-by-order while a column is grouped**
+- [x] **Step 3: Skip reorder-by-order while a column is grouped**
 
   In `moveFocusedCard`, extend the existing sort guard:
 
@@ -189,7 +189,7 @@ that mirrors the existing `columnSorts` map.
 
   Apply the identical change in `moveFocusedCardToEdge`.
 
-- [ ] **Step 4: Pass `grouped`/`onToggleGroup` to each real column**
+- [x] **Step 4: Pass `grouped`/`onToggleGroup` to each real column**
 
   In the `{#each columns as col (col.id)}` block's `<KanbanColumn>`:
 
@@ -201,14 +201,14 @@ that mirrors the existing `columnSorts` map.
   Leave the orphaned-cards `<KanbanColumn>` instance untouched (no grouping
   props), matching its existing lack of sort props.
 
-- [ ] **Step 5: Type-check**
+- [x] **Step 5: Type-check**
 
   Run: `bun run check-types`
 
   Expected: fails only on the still-missing `grouped`/`onToggleGroup` props
   on `KanbanColumn` (Task 3 adds them) — everything else in this file passes.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
   ```bash
   git add apps/web/src/components/KanbanBoard.svelte
@@ -231,7 +231,7 @@ that mirrors the existing `columnSorts` map.
   toggle button (`aria-pressed`); a status line combining the active sort and
   grouping state; a small label above each repo cluster's first visible card.
 
-- [ ] **Step 1: Write the failing browser test**
+- [x] **Step 1: Write the failing browser test**
 
   Add inside the existing `Review365` describe block, after the "column
   options: sorting stays open" test:
@@ -298,13 +298,13 @@ that mirrors the existing `columnSorts` map.
   });
   ```
 
-- [ ] **Step 2: Run the focused test and verify it fails**
+- [x] **Step 2: Run the focused test and verify it fails**
 
   Run: `bunx playwright test apps/web/e2e/board.e2e.ts --grep "group by repo"`
 
   Expected: FAIL — no "Group by repo" control exists in `KanbanColumn.svelte` yet.
 
-- [ ] **Step 3: Add the new props**
+- [x] **Step 3: Add the new props**
 
   ```ts
   let {
@@ -318,7 +318,7 @@ that mirrors the existing `columnSorts` map.
   } = $props();
   ```
 
-- [ ] **Step 4: Extend the header status line**
+- [x] **Step 4: Extend the header status line**
 
   Replace the existing `{:else if sortMode !== 'default'}` branch with one
   that reports both sort and grouping when either is active:
@@ -333,7 +333,7 @@ that mirrors the existing `columnSorts` map.
   {/if}
   ```
 
-- [ ] **Step 5: Add the Group section to the options panel**
+- [x] **Step 5: Add the Group section to the options panel**
 
   After the existing Sort grid (`</div>` closing the `grid-cols-2` block) and
   before the `<div class="my-3 h-px ...">` separator, insert:
@@ -360,7 +360,7 @@ that mirrors the existing `columnSorts` map.
   </button>
   ```
 
-- [ ] **Step 6: Render a repo label above each cluster's first card**
+- [x] **Step 6: Render a repo label above each cluster's first card**
 
   Change the card loop to track index and the previous card's repo:
 
@@ -382,19 +382,19 @@ that mirrors the existing `columnSorts` map.
   (Leave the rest of the existing per-card block — drop slots, `KanbanCard`,
   closing tags — unchanged.)
 
-- [ ] **Step 7: Run the focused test and verify it passes**
+- [x] **Step 7: Run the focused test and verify it passes**
 
   Run: `bunx playwright test apps/web/e2e/board.e2e.ts --grep "group by repo"`
 
   Expected: PASS.
 
-- [ ] **Step 8: Run the full suite**
+- [x] **Step 8: Run the full suite**
 
   Run: `bun run check && bunx playwright test apps/web/e2e/board.e2e.ts`
 
   Expected: exit code 0, no regressions in unrelated tests.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
   ```bash
   git add apps/web/src/components/KanbanColumn.svelte apps/web/e2e/board.e2e.ts
@@ -410,7 +410,7 @@ that mirrors the existing `columnSorts` map.
 - Modify: `CONTEXT.md` (only if it documents per-column view options —
   currently it does not, so this task may be a no-op; confirm before editing).
 
-- [ ] **Step 1: Check whether `CONTEXT.md` needs an update**
+- [x] **Step 1: Check whether `CONTEXT.md` needs an update**
 
   Grep for "Sort" or "sortMode" language in `CONTEXT.md`. If column-level
   view options aren't documented there today, skip this task rather than
