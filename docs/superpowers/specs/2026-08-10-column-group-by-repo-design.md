@@ -1,5 +1,15 @@
 # Column Group By Repo
 
+## Decision
+
+Prototyped three variants (inline cluster labels, collapsible per-repo
+accordion sections, color-coded left-border with no header rows) on
+`prototype/group-by-repo-variants` — a throwaway branch, not merged here.
+**Inline cluster labels won** (variant A): it needed no new interaction
+(no expand/collapse state to manage) and stayed legible without relying on
+color alone. The design below already described this direction; this section
+just records that it was checked against alternatives first.
+
 ## Goal
 
 Let a reviewer cluster a column's cards by repo, so PRs from the same repo sit
