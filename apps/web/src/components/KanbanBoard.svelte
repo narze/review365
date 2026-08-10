@@ -12,6 +12,7 @@
 	import { getTheme, setTheme, type Theme } from '$lib/theme';
 	import { nextCardId, columnEdgeId, type Dir } from '$lib/card-navigation';
 	import { cardMatchesQuery } from '$lib/card-filter';
+	import { groupCardsByRepo } from '$lib/card-grouping';
 	import type { ActivityEvent } from '$lib/activity';
 
 	let {
@@ -130,6 +131,15 @@
 		columnSorts = next;
 	}
 
+	let groupedColumns = $state<Set<ColumnId>>(new Set());
+
+	function onToggleGroup(colId: ColumnId, grouped: boolean) {
+		const next = new Set(groupedColumns);
+		if (grouped) next.add(colId);
+		else next.delete(colId);
+		groupedColumns = next;
+	}
+
 	function onColumnDragStart(colId: string) {
 		dragColId = colId;
 	}
@@ -223,23 +233,26 @@
 	function cardsForColumn(columnId: ColumnId): PRCard[] {
 		const cols = filteredCards.filter((c) => c.columnId === columnId);
 		const mode = columnSorts.get(columnId);
-		if (!mode || mode === 'default') {
-			return cols.sort((a, b) => a.order - b.order);
-		}
-		switch (mode) {
-			case 'pr-asc':
-				return cols.sort((a, b) => a.prNumber - b.prNumber);
-			case 'pr-desc':
-				return cols.sort((a, b) => b.prNumber - a.prNumber);
-			case 'age-asc':
-				return cols.sort(
-					(a, b) => new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime()
-				);
-			case 'age-desc':
-				return cols.sort(
-					(a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-				);
-		}
+		const sorted = (() => {
+			if (!mode || mode === 'default') {
+				return cols.sort((a, b) => a.order - b.order);
+			}
+			switch (mode) {
+				case 'pr-asc':
+					return cols.sort((a, b) => a.prNumber - b.prNumber);
+				case 'pr-desc':
+					return cols.sort((a, b) => b.prNumber - a.prNumber);
+				case 'age-asc':
+					return cols.sort(
+						(a, b) => new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime()
+					);
+				case 'age-desc':
+					return cols.sort(
+						(a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+					);
+			}
+		})();
+		return groupedColumns.has(columnId) ? groupCardsByRepo(sorted) : sorted;
 	}
 
 	function orphanedCards(): PRCard[] {
@@ -342,10 +355,10 @@
 		if (dir === 'up' || dir === 'down') {
 			const columnId = nav.colIds[col];
 			if (columnId === '__orphaned__') return;
-			// Reorder writes card `order`; a column shown under an active sort ignores
-			// order, so the move would be an invisible no-op — skip it.
+			// Reorder writes card `order`; a column shown under an active sort or
+			// grouping ignores order, so the move would be an invisible no-op — skip it.
 			const mode = columnSorts.get(columnId);
-			if (mode && mode !== 'default') return;
+			if ((mode && mode !== 'default') || groupedColumns.has(columnId)) return;
 			const cardIds = nav.grid[col];
 			if (dir === 'up') {
 				if (row === 0) return;
@@ -406,7 +419,7 @@
 		const columnId = nav.colIds[col];
 		if (columnId === '__orphaned__') return;
 		const mode = columnSorts.get(columnId);
-		if (mode && mode !== 'default') return;
+		if ((mode && mode !== 'default') || groupedColumns.has(columnId)) return;
 		const cardIds = nav.grid[col];
 		const id = focusedCardId;
 		if (dir === 'up') {
@@ -661,6 +674,8 @@
 					onColumnDragEnd={onColumnDragEnd}
 					sortMode={columnSorts.get(col.id) ?? 'default'}
 					onSort={(mode) => onSortColumn(col.id, mode as SortMode)}
+					grouped={groupedColumns.has(col.id)}
+					onToggleGroup={(g) => onToggleGroup(col.id, g)}
 					{focusedCardId}
 					{onSelectCard}
 					ciPopoverCardId={ciPopover?.card.id}
