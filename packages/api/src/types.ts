@@ -35,6 +35,11 @@ export interface ColumnDef {
   sortMode?: SortMode;
   /** Omitted or false means ungrouped. */
   grouped?: boolean;
+  /**
+   * Repo full names whose cluster is collapsed while `grouped` is true.
+   * Omitted or empty means every cluster is expanded.
+   */
+  collapsedRepos?: string[];
 }
 
 export interface AutomationRule {

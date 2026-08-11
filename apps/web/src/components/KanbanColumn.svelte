@@ -30,6 +30,8 @@
 		onSort = () => {},
 		grouped = false,
 		onToggleGroup = () => {},
+		collapsedRepos = [],
+		onToggleCollapse = () => {},
 		width = 300,
 		focusedCardId = null,
 		onSelectCard,
@@ -52,6 +54,8 @@
 		onSort?: (mode: SortMode) => void;
 		grouped?: boolean;
 		onToggleGroup?: (grouped: boolean) => void;
+		collapsedRepos?: string[];
+		onToggleCollapse?: (repo: string) => void;
 		width?: number;
 		focusedCardId?: string | null;
 		onSelectCard?: (id: string) => void;
@@ -103,6 +107,8 @@
 	const visibleCards = $derived(
 		showArchived ? cards : cards.filter((c) => !c.archived)
 	);
+
+	const collapsedSet = $derived(new Set(collapsedRepos));
 
 	function resetCopyStatus() {
 		if (copyStatusTimer) clearTimeout(copyStatusTimer);
@@ -367,42 +373,55 @@
 		{#each visibleCards as card, i (card.id)}
 			<div role="listitem" animate:flip={{ duration: 300 }}>
 				{#if grouped && (i === 0 || visibleCards[i - 1].repo !== card.repo)}
-					<div
-						class="mb-1 mt-1 flex items-center gap-1.5 px-1 text-[11px] font-semibold uppercase tracking-wide text-faint first:mt-0"
+					<button
+						type="button"
+						onclick={() => onToggleCollapse(card.repo)}
+						aria-expanded={!collapsedSet.has(card.repo)}
+						class="mb-1 mt-1 flex w-full items-center gap-1.5 rounded px-1 py-0.5 text-left text-[11px] font-semibold uppercase tracking-wide text-faint transition-colors hover-surface first:mt-0"
 					>
+						<span
+							aria-hidden="true"
+							class="shrink-0 text-[9px] transition-transform {collapsedSet.has(card.repo)
+								? '-rotate-90'
+								: ''}"
+						>
+							▾
+						</span>
 						<span class="truncate">{card.repo}</span>
 						<span class="shrink-0 normal-case tracking-normal">
 							· {visibleCards.filter((c) => c.repo === card.repo).length}
 						</span>
+					</button>
+				{/if}
+				{#if !grouped || !collapsedSet.has(card.repo)}
+					{#if dropTargetId === card.id && dropAbove && card.id !== cardDrag.cardId}
+						<div
+							class="drop-slot mb-2"
+							style="height: {gapHeight}px"
+							transition:slide={{ duration: 150 }}
+						></div>
+					{/if}
+					<div role="presentation" ondragover={(e) => handleCardDragOver(e, card.id)}>
+						<KanbanCard
+							{card}
+							{onArchive}
+							{onUnarchive}
+							{onUpdateNote}
+							focused={card.id === focusedCardId}
+							onSelect={onSelectCard}
+							ciDetailsOpen={card.id === ciPopoverCardId}
+							{onOpenCIPopover}
+							{onScheduleCIPopoverClose}
+							{onCloseCIPopover}
+						/>
 					</div>
-				{/if}
-				{#if dropTargetId === card.id && dropAbove && card.id !== cardDrag.cardId}
-					<div
-						class="drop-slot mb-2"
-						style="height: {gapHeight}px"
-						transition:slide={{ duration: 150 }}
-					></div>
-				{/if}
-				<div role="presentation" ondragover={(e) => handleCardDragOver(e, card.id)}>
-					<KanbanCard
-						{card}
-						{onArchive}
-						{onUnarchive}
-						{onUpdateNote}
-						focused={card.id === focusedCardId}
-						onSelect={onSelectCard}
-						ciDetailsOpen={card.id === ciPopoverCardId}
-						{onOpenCIPopover}
-						{onScheduleCIPopoverClose}
-						{onCloseCIPopover}
-					/>
-				</div>
-				{#if dropTargetId === card.id && !dropAbove && card.id !== cardDrag.cardId}
-					<div
-						class="drop-slot mt-2"
-						style="height: {gapHeight}px"
-						transition:slide={{ duration: 150 }}
-					></div>
+					{#if dropTargetId === card.id && !dropAbove && card.id !== cardDrag.cardId}
+						<div
+							class="drop-slot mt-2"
+							style="height: {gapHeight}px"
+							transition:slide={{ duration: 150 }}
+						></div>
+					{/if}
 				{/if}
 			</div>
 		{/each}

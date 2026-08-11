@@ -91,3 +91,28 @@ export function setColumnGrouped(config: BoardConfig, id: string, grouped: boole
     }),
   };
 }
+
+/** Toggles whether `repo`'s cluster is collapsed within column `id`. */
+export function toggleColumnRepoCollapse(
+  config: BoardConfig,
+  id: string,
+  repo: string,
+): BoardConfig {
+  return {
+    ...config,
+    columns: config.columns.map((c) => {
+      if (c.id !== id) return c;
+      const collapsed = new Set(c.collapsedRepos ?? []);
+      if (collapsed.has(repo)) {
+        collapsed.delete(repo);
+      } else {
+        collapsed.add(repo);
+      }
+      if (collapsed.size === 0) {
+        const { collapsedRepos: _collapsedRepos, ...rest } = c;
+        return rest;
+      }
+      return { ...c, collapsedRepos: [...collapsed].sort((a, b) => a.localeCompare(b)) };
+    }),
+  };
+}

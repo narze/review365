@@ -22,6 +22,7 @@ import {
   setColumnWidth,
   setColumnSort,
   setColumnGrouped,
+  toggleColumnRepoCollapse,
 } from "@review365/api/config";
 import { SIGNAL_LABELS } from "@review365/api/types";
 import type { BoardState, ColumnId, PRCard, Signal, SortMode } from "@review365/api/types";
@@ -191,4 +192,6 @@ export const config = {
   setColumnSort: (id: string, mode: SortMode) => mutateConfig((c) => setColumnSort(c, id, mode)),
   setColumnGrouped: (id: string, grouped: boolean) =>
     mutateConfig((c) => setColumnGrouped(c, id, grouped)),
+  toggleColumnRepoCollapse: (id: string, repo: string) =>
+    mutateConfig((c) => toggleColumnRepoCollapse(c, id, repo)),
 };

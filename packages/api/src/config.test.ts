@@ -11,6 +11,7 @@ import {
   setColumnWidth,
   setColumnSort,
   setColumnGrouped,
+  toggleColumnRepoCollapse,
 } from "./config";
 
 function emptyConfig(): BoardConfig {
@@ -227,5 +228,42 @@ describe("setColumnGrouped", () => {
     const result = setColumnGrouped(config(), "nonexistent", true);
     expect(result.columns[0].grouped).toBeUndefined();
     expect(result.columns[1].grouped).toBeUndefined();
+  });
+});
+
+describe("toggleColumnRepoCollapse", () => {
+  function config(): BoardConfig {
+    return {
+      columns: [
+        { id: "inbox", title: "Inbox" },
+        { id: "approved", title: "Approved" },
+      ],
+      rules: [],
+    };
+  }
+
+  it("collapses a repo on the matching column only", () => {
+    const result = toggleColumnRepoCollapse(config(), "inbox", "a/one");
+    expect(result.columns[0].collapsedRepos).toEqual(["a/one"]);
+    expect(result.columns[1].collapsedRepos).toBeUndefined();
+  });
+
+  it("toggling the same repo again expands it, omitting the empty array", () => {
+    const collapsed = toggleColumnRepoCollapse(config(), "inbox", "a/one");
+    const result = toggleColumnRepoCollapse(collapsed, "inbox", "a/one");
+    expect(result.columns[0].collapsedRepos).toBeUndefined();
+    expect("collapsedRepos" in result.columns[0]).toBe(false);
+  });
+
+  it("tracks multiple collapsed repos independently, sorted", () => {
+    const first = toggleColumnRepoCollapse(config(), "inbox", "b/two");
+    const result = toggleColumnRepoCollapse(first, "inbox", "a/one");
+    expect(result.columns[0].collapsedRepos).toEqual(["a/one", "b/two"]);
+  });
+
+  it("noops for unknown id", () => {
+    const result = toggleColumnRepoCollapse(config(), "nonexistent", "a/one");
+    expect(result.columns[0].collapsedRepos).toBeUndefined();
+    expect(result.columns[1].collapsedRepos).toBeUndefined();
   });
 });
