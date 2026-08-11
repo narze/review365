@@ -110,6 +110,32 @@
 
 	const collapsedSet = $derived(new Set(collapsedRepos));
 
+	// Contiguous runs of same-repo cards, one row per run. Ungrouped columns
+	// are a single headerless run so the card list below can stay one shape
+	// (an outer loop of rows, an inner loop of that row's cards) whether or
+	// not grouping is on.
+	//
+	// This split matters for a subtler reason too: `animate:flip` requires
+	// its element to be the *only* child of its keyed `{#each}` block, so the
+	// header (rendered per row, not per card) can't share a loop with the
+	// animated card wrapper. Nesting the card loop inside the row loop also
+	// means a collapsed row's cards are skipped by never being iterated at
+	// all, rather than rendered-then-hidden — so no leftover empty flex
+	// children pad the column-body's `gap-2` with dead space.
+	const groupedRows = $derived.by(() => {
+		if (!grouped) return [{ key: '__ungrouped__', repo: null as string | null, cards: visibleCards }];
+		const rows: { key: string; repo: string; cards: PRCard[] }[] = [];
+		for (const card of visibleCards) {
+			const current = rows[rows.length - 1];
+			if (current && current.repo === card.repo) {
+				current.cards.push(card);
+			} else {
+				rows.push({ key: `${card.repo}:${rows.length}`, repo: card.repo, cards: [card] });
+			}
+		}
+		return rows;
+	});
+
 	function resetCopyStatus() {
 		if (copyStatusTimer) clearTimeout(copyStatusTimer);
 		copyStatusTimer = setTimeout(() => (copyStatus = 'idle'), 2000);
@@ -370,60 +396,68 @@
 		{/if}
 	</div>
 	<div class="thin-scrollbar column-body flex flex-1 flex-col gap-2 overflow-y-auto p-2">
-		{#each visibleCards as card, i (card.id)}
-			<div role="listitem" animate:flip={{ duration: 300 }}>
-				{#if grouped && (i === 0 || visibleCards[i - 1].repo !== card.repo)}
-					<button
-						type="button"
-						onclick={() => onToggleCollapse(card.repo)}
-						aria-expanded={!collapsedSet.has(card.repo)}
-						class="mb-1 mt-1 flex w-full items-center gap-1.5 rounded px-1 py-0.5 text-left text-[11px] font-semibold uppercase tracking-wide text-faint transition-colors hover-surface first:mt-0"
+		{#each groupedRows as row (row.key)}
+			{#if row.repo}
+				{@const repo = row.repo}
+				<button
+					type="button"
+					onclick={() => onToggleCollapse(repo)}
+					aria-expanded={!collapsedSet.has(repo)}
+					class="mb-1 mt-1 flex w-full items-center gap-1.5 rounded px-1 py-0.5 text-left text-[11px] font-semibold uppercase tracking-wide text-faint transition-colors hover-surface first:mt-0"
+				>
+					<span
+						aria-hidden="true"
+						class="shrink-0 text-[9px] transition-transform {collapsedSet.has(repo)
+							? '-rotate-90'
+							: ''}"
 					>
-						<span
-							aria-hidden="true"
-							class="shrink-0 text-[9px] transition-transform {collapsedSet.has(card.repo)
-								? '-rotate-90'
-								: ''}"
-						>
-							▾
-						</span>
-						<span class="truncate">{card.repo}</span>
-						<span class="shrink-0 normal-case tracking-normal">
-							· {visibleCards.filter((c) => c.repo === card.repo).length}
-						</span>
-					</button>
-				{/if}
-				{#if !grouped || !collapsedSet.has(card.repo)}
-					{#if dropTargetId === card.id && dropAbove && card.id !== cardDrag.cardId}
-						<div
-							class="drop-slot mb-2"
-							style="height: {gapHeight}px"
-							transition:slide={{ duration: 150 }}
-						></div>
-					{/if}
-					<div role="presentation" ondragover={(e) => handleCardDragOver(e, card.id)}>
-						<KanbanCard
-							{card}
-							{onArchive}
-							{onUnarchive}
-							{onUpdateNote}
-							focused={card.id === focusedCardId}
-							onSelect={onSelectCard}
-							ciDetailsOpen={card.id === ciPopoverCardId}
-							{onOpenCIPopover}
-							{onScheduleCIPopoverClose}
-							{onCloseCIPopover}
-						/>
+						▾
+					</span>
+					<span class="truncate">{repo}</span>
+					<span class="shrink-0 normal-case tracking-normal">
+						· {row.cards.length}
+					</span>
+				</button>
+			{/if}
+			{#if !row.repo || !collapsedSet.has(row.repo)}
+				<!-- A collapsed row's cards must never enter this loop at all, not
+				     just render hidden: `column-body` lays out with `gap-2`, and
+				     that gap still opens up around an empty 0-height child, so a
+				     rendered-but-hidden card would pad the group with dead space
+				     proportional to how many cards it's hiding. -->
+				{#each row.cards as card (card.id)}
+					<div role="listitem" animate:flip={{ duration: 300 }}>
+						{#if dropTargetId === card.id && dropAbove && card.id !== cardDrag.cardId}
+							<div
+								class="drop-slot mb-2"
+								style="height: {gapHeight}px"
+								transition:slide={{ duration: 150 }}
+							></div>
+						{/if}
+						<div role="presentation" ondragover={(e) => handleCardDragOver(e, card.id)}>
+							<KanbanCard
+								{card}
+								{onArchive}
+								{onUnarchive}
+								{onUpdateNote}
+								focused={card.id === focusedCardId}
+								onSelect={onSelectCard}
+								ciDetailsOpen={card.id === ciPopoverCardId}
+								{onOpenCIPopover}
+								{onScheduleCIPopoverClose}
+								{onCloseCIPopover}
+							/>
+						</div>
+						{#if dropTargetId === card.id && !dropAbove && card.id !== cardDrag.cardId}
+							<div
+								class="drop-slot mt-2"
+								style="height: {gapHeight}px"
+								transition:slide={{ duration: 150 }}
+							></div>
+						{/if}
 					</div>
-					{#if dropTargetId === card.id && !dropAbove && card.id !== cardDrag.cardId}
-						<div
-							class="drop-slot mt-2"
-							style="height: {gapHeight}px"
-							transition:slide={{ duration: 150 }}
-						></div>
-					{/if}
-				{/if}
-			</div>
+				{/each}
+			{/if}
 		{/each}
 		{#if isOver && dropTargetId === null && cardDrag.cardId}
 			<div
