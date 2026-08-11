@@ -48,7 +48,7 @@
 		onUnarchive?: (id: string) => void;
 		onUpdateNote?: (cardId: string, note: string) => void;
 		showArchived?: boolean;
-		onColumnDragStart?: () => void;
+		onColumnDragStart?: (height: number) => void;
 		onColumnDragEnd?: () => void;
 		sortMode?: SortMode;
 		onSort?: (mode: SortMode) => void;
@@ -65,6 +65,7 @@
 		onCloseCIPopover?: () => void;
 	} = $props();
 
+	let columnEl: HTMLDivElement | undefined = $state();
 	let isOver = $state(false);
 	let dropTargetId: string | null = $state(null);
 	let dropAbove: boolean = $state(false);
@@ -230,6 +231,7 @@
 <svelte:window onpointerdown={handleWindowPointerDown} onkeydown={handleWindowKeydown} />
 
 <div
+	bind:this={columnEl}
 	class="flex max-h-[calc(100vh-100px)] shrink-0 flex-col rounded-xl border surface-panel transition-colors {isOver
 		? 'border-blue-500 bg-blue-50 dark:bg-blue-950/30'
 		: 'border-panel'}"
@@ -298,9 +300,13 @@
 				ondragstart={(e) => {
 					e.dataTransfer?.setData('application/column-id', col.id);
 					e.dataTransfer!.effectAllowed = 'move';
-					onColumnDragStart();
+					onColumnDragStart(columnEl?.offsetHeight ?? 0);
+					columnEl?.classList.add('dragging-column');
 				}}
-				ondragend={onColumnDragEnd}
+				ondragend={() => {
+					onColumnDragEnd?.();
+					columnEl?.classList.remove('dragging-column');
+				}}
 				class="grid w-8 shrink-0 cursor-grab place-items-center text-sm text-dim transition-colors hover:text-muted focus-visible:outline focus-visible:-outline-offset-2 focus-visible:outline-2 focus-visible:outline-blue-500 active:cursor-grabbing"
 				aria-label="Reorder column"
 				title="Drag to reorder column"
@@ -473,6 +479,11 @@
 </div>
 
 <style>
+	:global(.dragging-column) {
+		opacity: 0.5;
+		cursor: grabbing;
+	}
+
 	.drop-slot {
 		/* Purely visual: hit-testing must pass through to the column so the
 		   browser keeps firing dragover (and allows drop) while the pointer

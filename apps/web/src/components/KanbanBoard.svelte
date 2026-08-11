@@ -9,6 +9,8 @@
 	import ActivityPanel from './ActivityPanel.svelte';
 	import { SvelteMap } from 'svelte/reactivity';
 	import { tick } from 'svelte';
+	import { flip } from 'svelte/animate';
+	import { slide } from 'svelte/transition';
 	import { getTheme, setTheme, type Theme } from '$lib/theme';
 	import { nextCardId, columnEdgeId, type Dir } from '$lib/card-navigation';
 	import { cardMatchesQuery } from '$lib/card-filter';
@@ -121,6 +123,9 @@
 		ciPopover = null;
 	}
 	let dragColId: string | null = $state(null);
+	// Height of the dragged column, captured at drag start — sizes the drop
+	// gap the same way `cardDrag.height` sizes a card's drop slot.
+	let dragColHeight = $state(0);
 	let dropColTarget: string | null = $state(null);
 	let dropColBefore: boolean = $state(false);
 
@@ -128,13 +133,15 @@
 	// separate local state — `columns` is the single source of truth.
 	const columnsById = $derived(new Map(columns.map((c) => [c.id, c])));
 
-	function onColumnDragStart(colId: string) {
+	function onColumnDragStart(colId: string, height: number) {
 		dragColId = colId;
+		dragColHeight = height;
 	}
 
 	function onColumnDragEnd() {
 		dragColId = null;
 		dropColTarget = null;
+		dragColHeight = 0;
 	}
 
 	function handleColumnDragOver(e: DragEvent, colId: string) {
@@ -164,6 +171,7 @@
 		onReorderColumns(ids);
 		dropColTarget = null;
 		dragColId = null;
+		dragColHeight = 0;
 	}
 
 	function onThemeChange(next: Theme) {
@@ -646,44 +654,56 @@
 {:else}
 	<div class="thin-scrollbar flex min-h-[calc(100vh-65px)] items-start gap-4 overflow-x-auto p-6">
 		{#each columns as col (col.id)}
-			<div
-				role="presentation"
-				ondragover={(e) => handleColumnDragOver(e, col.id)}
-				ondragleave={() => {
-					if (dropColTarget === col.id) dropColTarget = null;
-				}}
-				ondrop={(e) => handleColumnDrop(e, col.id)}
-				class="rounded-xl transition-all {dropColTarget === col.id
-					? dropColBefore
-						? 'border-l-4 border-l-blue-500'
-						: 'border-r-4 border-r-blue-500'
-					: ''}"
-			>
-				<KanbanColumn
-					{col}
-					width={columnWidthPx}
-					cards={cardsForColumn(col.id)}
-					onDrop={onMoveCard}
-					onReorder={onReorderCard}
-					onArchive={onArchiveCard}
-					onUnarchive={onUnarchiveCard}
-					onUpdateNote={onUpdateNote}
-					{showArchived}
-					onColumnDragStart={() => onColumnDragStart(col.id)}
-					onColumnDragEnd={onColumnDragEnd}
-					sortMode={col.sortMode ?? 'default'}
-					onSort={(mode) => onSortColumn(col.id, mode)}
-					grouped={col.grouped ?? false}
-					onToggleGroup={(g) => onToggleGroup(col.id, g)}
-					collapsedRepos={col.collapsedRepos ?? []}
-					onToggleCollapse={(repo) => onToggleGroupCollapse(col.id, repo)}
-					{focusedCardId}
-					{onSelectCard}
-					ciPopoverCardId={ciPopover?.card.id}
-					onOpenCIPopover={openCIPopover}
-					onScheduleCIPopoverClose={scheduleCIPopoverClose}
-					onCloseCIPopover={closeCIPopover}
-				/>
+			<div class="flex items-start gap-4" animate:flip={{ duration: 300 }}>
+				{#if dropColTarget === col.id && dropColBefore && col.id !== dragColId}
+					<div
+						class="column-drop-slot"
+						style="width: {columnWidthPx}px; height: {dragColHeight || 200}px"
+						transition:slide={{ duration: 150, axis: 'x' }}
+					></div>
+				{/if}
+				<div
+					role="presentation"
+					ondragover={(e) => handleColumnDragOver(e, col.id)}
+					ondragleave={() => {
+						if (dropColTarget === col.id) dropColTarget = null;
+					}}
+					ondrop={(e) => handleColumnDrop(e, col.id)}
+					class="rounded-xl"
+				>
+					<KanbanColumn
+						{col}
+						width={columnWidthPx}
+						cards={cardsForColumn(col.id)}
+						onDrop={onMoveCard}
+						onReorder={onReorderCard}
+						onArchive={onArchiveCard}
+						onUnarchive={onUnarchiveCard}
+						onUpdateNote={onUpdateNote}
+						{showArchived}
+						onColumnDragStart={(height) => onColumnDragStart(col.id, height)}
+						onColumnDragEnd={onColumnDragEnd}
+						sortMode={col.sortMode ?? 'default'}
+						onSort={(mode) => onSortColumn(col.id, mode)}
+						grouped={col.grouped ?? false}
+						onToggleGroup={(g) => onToggleGroup(col.id, g)}
+						collapsedRepos={col.collapsedRepos ?? []}
+						onToggleCollapse={(repo) => onToggleGroupCollapse(col.id, repo)}
+						{focusedCardId}
+						{onSelectCard}
+						ciPopoverCardId={ciPopover?.card.id}
+						onOpenCIPopover={openCIPopover}
+						onScheduleCIPopoverClose={scheduleCIPopoverClose}
+						onCloseCIPopover={closeCIPopover}
+					/>
+				</div>
+				{#if dropColTarget === col.id && !dropColBefore && col.id !== dragColId}
+					<div
+						class="column-drop-slot"
+						style="width: {columnWidthPx}px; height: {dragColHeight || 200}px"
+						transition:slide={{ duration: 150, axis: 'x' }}
+					></div>
+				{/if}
 			</div>
 		{/each}
 		{#if orphanedCards().length > 0}
@@ -717,3 +737,16 @@
 {/if}
 
 {/if}
+
+<style>
+	.column-drop-slot {
+		/* Purely visual: hit-testing must pass through to the column track so
+		   the browser keeps firing dragover (and allows drop) while the
+		   pointer rests on the gap that just opened underneath it. */
+		pointer-events: none;
+		flex-shrink: 0;
+		border-radius: 0.75rem;
+		border: 2px dashed rgba(59, 130, 246, 0.55);
+		background: rgba(59, 130, 246, 0.08);
+	}
+</style>
