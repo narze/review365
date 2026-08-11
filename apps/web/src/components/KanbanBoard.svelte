@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { PRCard, ColumnId, ColumnDef, Platform } from '@review365/api/types';
+	import type { PRCard, ColumnId, ColumnDef, Platform, SortMode } from '@review365/api/types';
 	import KanbanColumn from './KanbanColumn.svelte';
 	import CIChecksPopover from './CIChecksPopover.svelte';
 	import RepoFilter from './RepoFilter.svelte';
@@ -39,6 +39,8 @@
 		onSetRetention,
 		columnWidthPx = 300,
 		onSetColumnWidth,
+		onSortColumn,
+		onToggleGroup,
 		onSignOut,
 		onImported,
 		platform,
@@ -74,6 +76,8 @@
 		onSetRetention: (days: number) => void;
 		columnWidthPx: number;
 		onSetColumnWidth: (px: number) => void;
+		onSortColumn: (id: string, mode: SortMode) => void;
+		onToggleGroup: (id: string, grouped: boolean) => void;
 		onSignOut: () => void;
 		onImported: () => void;
 		platform: Platform;
@@ -118,27 +122,9 @@
 	let dropColTarget: string | null = $state(null);
 	let dropColBefore: boolean = $state(false);
 
-	type SortMode = 'default' | 'pr-asc' | 'pr-desc' | 'age-asc' | 'age-desc';
-	let columnSorts = $state<Map<ColumnId, SortMode>>(new Map());
-
-	function onSortColumn(colId: ColumnId, mode: SortMode) {
-		const next = new Map(columnSorts);
-		if (mode === 'default') {
-			next.delete(colId);
-		} else {
-			next.set(colId, mode);
-		}
-		columnSorts = next;
-	}
-
-	let groupedColumns = $state<Set<ColumnId>>(new Set());
-
-	function onToggleGroup(colId: ColumnId, grouped: boolean) {
-		const next = new Set(groupedColumns);
-		if (grouped) next.add(colId);
-		else next.delete(colId);
-		groupedColumns = next;
-	}
+	// Sort mode and grouping live on each ColumnDef (persisted config), not as
+	// separate local state — `columns` is the single source of truth.
+	const columnsById = $derived(new Map(columns.map((c) => [c.id, c])));
 
 	function onColumnDragStart(colId: string) {
 		dragColId = colId;
@@ -232,7 +218,7 @@
 
 	function cardsForColumn(columnId: ColumnId): PRCard[] {
 		const cols = filteredCards.filter((c) => c.columnId === columnId);
-		const mode = columnSorts.get(columnId);
+		const mode = columnsById.get(columnId)?.sortMode;
 		const sorted = (() => {
 			if (!mode || mode === 'default') {
 				return cols.sort((a, b) => a.order - b.order);
@@ -252,7 +238,7 @@
 					);
 			}
 		})();
-		return groupedColumns.has(columnId) ? groupCardsByRepo(sorted) : sorted;
+		return columnsById.get(columnId)?.grouped ? groupCardsByRepo(sorted) : sorted;
 	}
 
 	function orphanedCards(): PRCard[] {
@@ -357,8 +343,8 @@
 			if (columnId === '__orphaned__') return;
 			// Reorder writes card `order`; a column shown under an active sort or
 			// grouping ignores order, so the move would be an invisible no-op — skip it.
-			const mode = columnSorts.get(columnId);
-			if ((mode && mode !== 'default') || groupedColumns.has(columnId)) return;
+			const target = columnsById.get(columnId);
+			if ((target?.sortMode && target.sortMode !== 'default') || target?.grouped) return;
 			const cardIds = nav.grid[col];
 			if (dir === 'up') {
 				if (row === 0) return;
@@ -418,8 +404,8 @@
 		const { col, row } = pos;
 		const columnId = nav.colIds[col];
 		if (columnId === '__orphaned__') return;
-		const mode = columnSorts.get(columnId);
-		if ((mode && mode !== 'default') || groupedColumns.has(columnId)) return;
+		const target = columnsById.get(columnId);
+		if ((target?.sortMode && target.sortMode !== 'default') || target?.grouped) return;
 		const cardIds = nav.grid[col];
 		const id = focusedCardId;
 		if (dir === 'up') {
@@ -672,9 +658,9 @@
 					{showArchived}
 					onColumnDragStart={() => onColumnDragStart(col.id)}
 					onColumnDragEnd={onColumnDragEnd}
-					sortMode={columnSorts.get(col.id) ?? 'default'}
-					onSort={(mode) => onSortColumn(col.id, mode as SortMode)}
-					grouped={groupedColumns.has(col.id)}
+					sortMode={col.sortMode ?? 'default'}
+					onSort={(mode) => onSortColumn(col.id, mode)}
+					grouped={col.grouped ?? false}
 					onToggleGroup={(g) => onToggleGroup(col.id, g)}
 					{focusedCardId}
 					{onSelectCard}

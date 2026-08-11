@@ -1,11 +1,9 @@
 <script lang="ts">
 	import { flip } from 'svelte/animate';
 	import { slide } from 'svelte/transition';
-	import type { PRCard, ColumnId, ColumnDef } from '@review365/api/types';
+	import type { PRCard, ColumnId, ColumnDef, SortMode } from '@review365/api/types';
 	import KanbanCard from './KanbanCard.svelte';
 	import { cardDrag } from '$lib/drag-state.svelte';
-
-	type SortMode = 'default' | 'pr-asc' | 'pr-desc' | 'age-asc' | 'age-desc';
 
 	// `hint` spells out what the sort actually does — the label alone ("Oldest
 	// first") reads ambiguously against a board where cards also carry an age.
