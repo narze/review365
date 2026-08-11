@@ -97,6 +97,22 @@ active sort already does. Reuse that precedent exactly:
 ## Non-goals
 
 - No grouping by any field other than repo (e.g. author) in this iteration.
-- No collapsing/collapsible clusters — labels are informational only.
 - The orphaned-cards column does not get a grouping control, consistent with
   it not having a sort control today.
+
+## Update: collapsible clusters (2026-08-11)
+
+Revisited: clusters can now be collapsed. Clicking a cluster's label (now a
+button, with `aria-expanded`) hides that repo's cards in the column while
+keeping the label and its count visible; clicking again expands it.
+
+- `ColumnDef` gains `collapsedRepos?: string[]` — the repo full names
+  collapsed within that column, omitted when empty. Persisted and toggled
+  the same way as `grouped` (`toggleColumnRepoCollapse` in
+  `packages/api/src/config.ts`, mirroring `setColumnGrouped`).
+- Collapsing is purely a render-time filter in `KanbanColumn.svelte`: the
+  card list, counts, and Copy list output are unaffected, only the card
+  markup for a collapsed repo is skipped.
+- `KanbanBoard.svelte`'s keyboard-nav grid excludes cards under a collapsed
+  cluster (`navigableCardsForColumn`), so arrow-key focus and Shift+move
+  skip them the same way they already skip archived cards when hidden.
