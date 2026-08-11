@@ -326,6 +326,10 @@
 		applyConfig(await configService.setColumnGrouped(id, grouped));
 	}
 
+	async function onToggleGroupCollapse(id: string, repo: string) {
+		applyConfig(await configService.toggleColumnRepoCollapse(id, repo));
+	}
+
 	function onSignOut() {
 		signedIn = false;
 		login = null;
@@ -439,6 +443,7 @@
 		{onSetColumnWidth}
 		{onSortColumn}
 		{onToggleGroup}
+		{onToggleGroupCollapse}
 		{onSignOut}
 		{platform}
 		{login}

@@ -41,6 +41,7 @@
 		onSetColumnWidth,
 		onSortColumn,
 		onToggleGroup,
+		onToggleGroupCollapse,
 		onSignOut,
 		onImported,
 		platform,
@@ -78,6 +79,7 @@
 		onSetColumnWidth: (px: number) => void;
 		onSortColumn: (id: string, mode: SortMode) => void;
 		onToggleGroup: (id: string, grouped: boolean) => void;
+		onToggleGroupCollapse: (id: string, repo: string) => void;
 		onSignOut: () => void;
 		onImported: () => void;
 		platform: Platform;
@@ -241,6 +243,17 @@
 		return columnsById.get(columnId)?.grouped ? groupCardsByRepo(sorted) : sorted;
 	}
 
+	// Cards actually reachable by keyboard: same as `cardsForColumn`, minus any
+	// cards sitting under a collapsed repo cluster. Only grouped columns carry
+	// `collapsedRepos`, so this is a no-op everywhere else.
+	function navigableCardsForColumn(columnId: ColumnId): PRCard[] {
+		const cards = cardsForColumn(columnId);
+		const col = columnsById.get(columnId);
+		if (!col?.grouped || !col.collapsedRepos?.length) return cards;
+		const collapsed = new Set(col.collapsedRepos);
+		return cards.filter((c) => !collapsed.has(c.repo));
+	}
+
 	function orphanedCards(): PRCard[] {
 		const orphanIds = new Set(orphans.map((o) => o.cardId));
 		return filteredCards.filter((c) => orphanIds.has(c.id));
@@ -271,7 +284,7 @@
 		const grid: string[][] = [];
 		const colIds: string[] = [];
 		for (const col of columns) {
-			grid.push(vis(cardsForColumn(col.id)).map((c) => c.id));
+			grid.push(vis(navigableCardsForColumn(col.id)).map((c) => c.id));
 			colIds.push(col.id);
 		}
 		const orph = vis(orphanedCards()).map((c) => c.id);
@@ -662,6 +675,8 @@
 					onSort={(mode) => onSortColumn(col.id, mode)}
 					grouped={col.grouped ?? false}
 					onToggleGroup={(g) => onToggleGroup(col.id, g)}
+					collapsedRepos={col.collapsedRepos ?? []}
+					onToggleCollapse={(repo) => onToggleGroupCollapse(col.id, repo)}
 					{focusedCardId}
 					{onSelectCard}
 					ciPopoverCardId={ciPopover?.card.id}
