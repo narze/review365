@@ -600,6 +600,41 @@ test.describe("Review365", () => {
     await expect(inboxColumn.getByText(/Sorted by/)).toBeHidden();
   });
 
+  test("column options: closing the panel with Escape doesn't break keyboard reorder", async ({
+    page,
+  }) => {
+    // Regression: the board's own Escape handler clears the focused card
+    // (for "deselect") on every Escape keypress — including one that only
+    // closed the column's options panel. That silently broke Shift+↑/↓
+    // until the card was refocused with a plain arrow key.
+    await seedAuth(page, { enabledRepos: [REPO] });
+    await mockGitHub(page, {
+      open: [ghItem(1, "First PR"), ghItem(2, "Second PR"), ghItem(3, "Third PR")],
+    });
+
+    await page.goto("/", { waitUntil: "networkidle" });
+    const inboxColumn = page.getByRole("region", { name: "📥 Inbox" });
+    const orderOf = () =>
+      inboxColumn
+        .locator("[data-card-id]")
+        .evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.cardId ?? null));
+
+    await expect.poll(orderOf).toEqual(["pr_test_repo_1", "pr_test_repo_2", "pr_test_repo_3"]);
+
+    // Focus the first card, then open and close the options panel — a plain
+    // open/close, not touching Sort or Group — via Escape.
+    await page.keyboard.press("ArrowDown");
+    await inboxColumn.getByRole("button", { name: "📥 Inbox column options" }).click();
+    const panel = inboxColumn.getByRole("dialog");
+    await expect(panel).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(panel).toBeHidden();
+
+    // The card is still the focused one, so Shift+ArrowDown still reorders it.
+    await page.keyboard.press("Shift+ArrowDown");
+    await expect.poll(orderOf).toEqual(["pr_test_repo_2", "pr_test_repo_1", "pr_test_repo_3"]);
+  });
+
   test("column options: group by repo clusters cards and can be turned off", async ({ page }) => {
     const REPO2 = "test/other-repo";
     await seedAuth(page, { enabledRepos: [REPO, REPO2] });

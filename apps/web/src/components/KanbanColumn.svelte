@@ -93,7 +93,13 @@
 	}
 
 	function handleWindowKeydown(e: KeyboardEvent) {
-		if (optionsOpen && e.key === 'Escape') closeOptions(true);
+		if (!optionsOpen || e.key !== 'Escape') return;
+		// Closing the panel is this Escape's whole job — stop it here so the
+		// board's own Escape handler doesn't also treat it as "deselect the
+		// focused card" and silently drop keyboard reorder (Shift+↑/↓) until
+		// the card is refocused.
+		e.stopImmediatePropagation();
+		closeOptions(true);
 	}
 
 	const visibleCards = $derived(
