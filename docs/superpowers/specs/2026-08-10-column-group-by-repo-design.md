@@ -37,8 +37,8 @@ column's existing sort.
 - The column header's status line reflects both active view options at once,
   e.g. `Sorted by PR number ↑ · Grouped by repo`, matching the existing
   "Sorted by …" line.
-- Grouping is per-column, transient view state — like sort mode, it is not
-  written to board state and resets on reload.
+- Both sort mode and grouping are persisted per column (see Implementation)
+  and survive a reload, the same as a column's title or width.
 - Grouping composes with the text filter and the archived toggle exactly like
   sort does: it operates on whatever cards are already visible.
 
@@ -68,8 +68,14 @@ active sort already does. Reuse that precedent exactly:
   agnostic of _how_ order was produced — same contract sort already uses.
   Keyboard navigation (`nav.grid`) already reads from `cardsForColumn`, so it
   automatically follows the grouped/sorted order with no separate wiring.
-- Track grouped columns the same way `columnSorts` tracks sort mode: a
-  `Set<ColumnId>` of currently-grouped column ids in `KanbanBoard.svelte`.
+- `sortMode` and `grouped` live directly on `ColumnDef` (optional fields,
+  omitted rather than stored when they're the default), the same place a
+  column's `title` already lives — not separate ephemeral state. That makes
+  them part of `BoardConfig`, so they persist through the existing
+  config-store round trip (`packages/api/src/config.ts`'s `setColumnSort`
+  and `setColumnGrouped`, mirroring `setColumnWidth`) with no new storage
+  mechanism. `KanbanBoard.svelte` reads them straight off each column (via a
+  `columnsById` lookup) instead of keeping its own `Map`/`Set`.
 - `KanbanColumn.svelte` renders the per-repo label by comparing each visible
   card's `repo` against the previous one in iteration order — no extra data
   structure needed beyond the already-grouped `cards` prop.
@@ -84,10 +90,12 @@ active sort already does. Reuse that precedent exactly:
 - A Playwright test toggles **Group by repo** on a column seeded with cards
   from two repos, asserts the on-screen card order clusters by repo with
   labels visible, and asserts turning it back off restores the prior order.
+- A Playwright test sets both sort and grouping on a column, reloads the
+  page, and asserts both survive — and that turning grouping back off and
+  reloading again also persists.
 
 ## Non-goals
 
-- No persistence — like sort mode, grouping resets on reload.
 - No grouping by any field other than repo (e.g. author) in this iteration.
 - No collapsing/collapsible clusters — labels are informational only.
 - The orphaned-cards column does not get a grouping control, consistent with

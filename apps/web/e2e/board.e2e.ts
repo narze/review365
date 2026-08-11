@@ -693,6 +693,35 @@ test.describe("Review365", () => {
     await expect(inboxColumn.getByText("Grouped by repo")).toBeHidden();
   });
 
+  test("column options: sort and group by repo persist across a reload", async ({ page }) => {
+    await seedAuth(page, { enabledRepos: [REPO] });
+    await mockGitHub(page, {
+      open: [ghItem(1, "First PR"), ghItem(2, "Second PR"), ghItem(3, "Third PR")],
+    });
+
+    await page.goto("/", { waitUntil: "networkidle" });
+    const inboxColumn = page.getByRole("region", { name: "📥 Inbox" });
+
+    await inboxColumn.getByRole("button", { name: "📥 Inbox column options" }).click();
+    const panel = inboxColumn.getByRole("dialog");
+    await panel.getByRole("button", { name: /PR number ↓/ }).click();
+    await panel.getByRole("button", { name: "Group by repo" }).click();
+    await expect(inboxColumn.getByText("Sorted by PR number ↓ · Grouped by repo")).toBeVisible();
+
+    await page.reload({ waitUntil: "networkidle" });
+    await expect(inboxColumn.getByText("Sorted by PR number ↓ · Grouped by repo")).toBeVisible();
+
+    // Turning grouping back off also persists.
+    await inboxColumn.getByRole("button", { name: "📥 Inbox column options" }).click();
+    await panel.getByRole("button", { name: "Group by repo" }).click();
+    await expect(inboxColumn.getByText("Sorted by PR number ↓")).toBeVisible();
+    await expect(inboxColumn.getByText(/Grouped by repo/)).toBeHidden();
+
+    await page.reload({ waitUntil: "networkidle" });
+    await expect(inboxColumn.getByText("Sorted by PR number ↓")).toBeVisible();
+    await expect(inboxColumn.getByText(/Grouped by repo/)).toBeHidden();
+  });
+
   test("text filter: narrows cards by title, author, and PR number", async ({ page }) => {
     await seedAuth(page, { enabledRepos: [REPO] });
     await mockGitHub(page, {
