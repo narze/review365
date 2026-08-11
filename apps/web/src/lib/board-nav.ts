@@ -55,8 +55,9 @@ export function createBoardNav() {
 		 *
 		 * Up/down reorders within the current column, and is refused when
 		 * `isReorderable` says the column's order is unavailable right now
-		 * (a synthetic bucket, an active sort, or grouping all ignore card
-		 * `order`, so the move would be an invisible no-op).
+		 * (a synthetic bucket, or an active sort that re-derives display order
+		 * from something other than `order`, making the write an invisible
+		 * no-op).
 		 *
 		 * Left/right moves the card into the neighbouring column -- always a
 		 * real, visible move regardless of that column's sort/group state, so

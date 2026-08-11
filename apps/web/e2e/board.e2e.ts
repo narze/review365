@@ -539,6 +539,43 @@ test.describe("Review365", () => {
     expect(await focusedId()).toBe(middle);
   });
 
+  test("keyboard: Shift+Arrow still reorders within a grouped column", async ({ page }) => {
+    await seedAuth(page, { enabledRepos: [REPO] });
+    await mockGitHub(page, {
+      open: [ghItem(1, "One PR"), ghItem(2, "Two PR"), ghItem(3, "Three PR")],
+    });
+
+    await page.goto("/", { waitUntil: "networkidle" });
+    const inboxColumn = page.getByRole("region", { name: "📥 Inbox" });
+    const orderOf = () =>
+      inboxColumn
+        .locator("[data-card-id]")
+        .evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.cardId ?? null));
+    const focusedId = () =>
+      page.evaluate(() => document.activeElement?.getAttribute("data-card-id") ?? null);
+
+    await expect.poll(() => orderOf().then((ids) => ids.length)).toBe(3);
+    const before = await orderOf();
+
+    await inboxColumn.getByRole("button", { name: "📥 Inbox column options" }).click();
+    await inboxColumn.getByRole("dialog").getByRole("button", { name: "Group by repo" }).click();
+    await page.keyboard.press("Escape");
+    await expect(inboxColumn.getByText("Grouped by repo")).toBeVisible();
+
+    // A single watched repo is a single cluster: groupCardsByRepo keeps its
+    // cards in `order`, so reorder within it is still visible -- same as
+    // mouse drag, which never blocks on grouping either.
+    await inboxColumn.locator("[data-card-id]").first().click();
+    expect(await focusedId()).toBe(before[0]);
+    await page.keyboard.press("Shift+ArrowDown");
+    await expect.poll(orderOf).toEqual([before[1], before[0], before[2]]);
+    expect(await focusedId()).toBe(before[0]);
+
+    // Ctrl+Shift+Down (move-to-edge) goes through the same eligibility check.
+    await page.keyboard.press("ControlOrMeta+Shift+ArrowDown");
+    await expect.poll(orderOf).toEqual([before[1], before[2], before[0]]);
+  });
+
   test("column list: copies visible cards as a Markdown list", async ({ page, context }) => {
     await context.grantPermissions(["clipboard-read", "clipboard-write"]);
     await seedAuth(page, { enabledRepos: [REPO] });

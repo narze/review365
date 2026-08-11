@@ -340,15 +340,17 @@
 		el.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
 	}
 
-	// Reorder writes card `order`; a column shown under an active sort or
-	// grouping ignores order, so a same-column reorder would be an invisible
-	// no-op — refuse those. A cross-column move is never a no-op (the card
-	// visibly changes column), so it's only refused for the synthetic
-	// orphaned bucket.
+	// Reorder writes card `order`; a column shown under an active sort ignores
+	// order, so a same-column reorder would be an invisible no-op — refuse
+	// those. Grouping alone doesn't: groupCardsByRepo clusters by repo but
+	// keeps each cluster's cards in `order`, so a same-column reorder is still
+	// visible there (as it already is via mouse drag, which never blocks on
+	// either). A cross-column move is never a no-op (the card visibly changes
+	// column), so it's only refused for the synthetic orphaned bucket.
 	function isReorderable(colId: string): boolean {
 		if (colId === ORPHANED_COLUMN_ID) return false;
 		const col = columnsById.get(colId);
-		return !((col?.sortMode && col.sortMode !== 'default') || col?.grouped);
+		return !(col?.sortMode && col.sortMode !== 'default');
 	}
 
 	function canReceiveCard(colId: string): boolean {
