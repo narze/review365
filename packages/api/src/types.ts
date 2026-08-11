@@ -26,9 +26,15 @@ export type Signal =
   | "approved"
   | "changes-requested";
 
+export type SortMode = "default" | "pr-asc" | "pr-desc" | "age-asc" | "age-desc";
+
 export interface ColumnDef {
   id: string;
   title: string;
+  /** Omitted (or "default") means drag order — the same as not having a sort. */
+  sortMode?: SortMode;
+  /** Omitted or false means ungrouped. */
+  grouped?: boolean;
 }
 
 export interface AutomationRule {

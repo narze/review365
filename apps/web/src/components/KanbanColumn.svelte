@@ -1,11 +1,9 @@
 <script lang="ts">
 	import { flip } from 'svelte/animate';
 	import { slide } from 'svelte/transition';
-	import type { PRCard, ColumnId, ColumnDef } from '@review365/api/types';
+	import type { PRCard, ColumnId, ColumnDef, SortMode } from '@review365/api/types';
 	import KanbanCard from './KanbanCard.svelte';
 	import { cardDrag } from '$lib/drag-state.svelte';
-
-	type SortMode = 'default' | 'pr-asc' | 'pr-desc' | 'age-asc' | 'age-desc';
 
 	// `hint` spells out what the sort actually does — the label alone ("Oldest
 	// first") reads ambiguously against a board where cards also carry an age.
@@ -30,6 +28,8 @@
 		onColumnDragEnd,
 		sortMode = 'default',
 		onSort = () => {},
+		grouped = false,
+		onToggleGroup = () => {},
 		width = 300,
 		focusedCardId = null,
 		onSelectCard,
@@ -50,6 +50,8 @@
 		onColumnDragEnd?: () => void;
 		sortMode?: SortMode;
 		onSort?: (mode: SortMode) => void;
+		grouped?: boolean;
+		onToggleGroup?: (grouped: boolean) => void;
 		width?: number;
 		focusedCardId?: string | null;
 		onSelectCard?: (id: string) => void;
@@ -89,7 +91,13 @@
 	}
 
 	function handleWindowKeydown(e: KeyboardEvent) {
-		if (optionsOpen && e.key === 'Escape') closeOptions(true);
+		if (!optionsOpen || e.key !== 'Escape') return;
+		// Closing the panel is this Escape's whole job — stop it here so the
+		// board's own Escape handler doesn't also treat it as "deselect the
+		// focused card" and silently drop keyboard reorder (Shift+↑/↓) until
+		// the card is refocused.
+		e.stopImmediatePropagation();
+		closeOptions(true);
 	}
 
 	const visibleCards = $derived(
@@ -235,9 +243,11 @@
 								? 'Nothing to copy'
 								: 'Copy failed'}
 					</span>
-				{:else if sortMode !== 'default'}
+				{:else if sortMode !== 'default' || grouped}
 					<span class="block truncate text-[11px] text-blue-600 dark:text-blue-400">
-						Sorted by {activeSort.label}
+						{[sortMode !== 'default' ? `Sorted by ${activeSort.label}` : null, grouped ? 'Grouped by repo' : null]
+							.filter(Boolean)
+							.join(' · ')}
 					</span>
 				{/if}
 			</span>
@@ -312,6 +322,26 @@
 					{/each}
 				</div>
 
+				<div class="mb-2 mt-3 flex items-center justify-between">
+					<span class="text-[11px] font-semibold uppercase tracking-wide text-faint">Group</span>
+				</div>
+				<button
+					type="button"
+					aria-pressed={grouped}
+					onclick={() => onToggleGroup(!grouped)}
+					class="flex w-full items-center gap-1.5 rounded-lg border px-2.5 py-2 text-left text-xs transition-colors {grouped
+						? 'border-blue-500 bg-blue-600 text-white'
+						: 'border-control text-body hover-surface'}"
+				>
+					<span aria-hidden="true" class="w-4 shrink-0 text-center">📦</span>
+					<span class="min-w-0 flex-1">
+						<span class="block truncate font-medium">Group by repo</span>
+						<span class="block truncate text-[10px] {grouped ? 'text-blue-100' : 'text-faint'}">
+							cluster cards by repo
+						</span>
+					</span>
+				</button>
+
 				<div class="my-3 h-px bg-neutral-200 dark:bg-neutral-800"></div>
 
 				<button
@@ -334,8 +364,18 @@
 		{/if}
 	</div>
 	<div class="thin-scrollbar column-body flex flex-1 flex-col gap-2 overflow-y-auto p-2">
-		{#each visibleCards as card (card.id)}
+		{#each visibleCards as card, i (card.id)}
 			<div role="listitem" animate:flip={{ duration: 300 }}>
+				{#if grouped && (i === 0 || visibleCards[i - 1].repo !== card.repo)}
+					<div
+						class="mb-1 mt-1 flex items-center gap-1.5 px-1 text-[11px] font-semibold uppercase tracking-wide text-faint first:mt-0"
+					>
+						<span class="truncate">{card.repo}</span>
+						<span class="shrink-0 normal-case tracking-normal">
+							· {visibleCards.filter((c) => c.repo === card.repo).length}
+						</span>
+					</div>
+				{/if}
 				{#if dropTargetId === card.id && dropAbove && card.id !== cardDrag.cardId}
 					<div
 						class="drop-slot mb-2"

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { PRCard, ColumnId, ColumnDef, Platform } from '@review365/api/types';
+	import type { PRCard, ColumnId, ColumnDef, Platform, SortMode } from '@review365/api/types';
 	import KanbanColumn from './KanbanColumn.svelte';
 	import CIChecksPopover from './CIChecksPopover.svelte';
 	import RepoFilter from './RepoFilter.svelte';
@@ -12,6 +12,7 @@
 	import { getTheme, setTheme, type Theme } from '$lib/theme';
 	import { nextCardId, columnEdgeId, type Dir } from '$lib/card-navigation';
 	import { cardMatchesQuery } from '$lib/card-filter';
+	import { groupCardsByRepo } from '$lib/card-grouping';
 	import type { ActivityEvent } from '$lib/activity';
 
 	let {
@@ -38,6 +39,8 @@
 		onSetRetention,
 		columnWidthPx = 300,
 		onSetColumnWidth,
+		onSortColumn,
+		onToggleGroup,
 		onSignOut,
 		onImported,
 		platform,
@@ -73,6 +76,8 @@
 		onSetRetention: (days: number) => void;
 		columnWidthPx: number;
 		onSetColumnWidth: (px: number) => void;
+		onSortColumn: (id: string, mode: SortMode) => void;
+		onToggleGroup: (id: string, grouped: boolean) => void;
 		onSignOut: () => void;
 		onImported: () => void;
 		platform: Platform;
@@ -117,18 +122,9 @@
 	let dropColTarget: string | null = $state(null);
 	let dropColBefore: boolean = $state(false);
 
-	type SortMode = 'default' | 'pr-asc' | 'pr-desc' | 'age-asc' | 'age-desc';
-	let columnSorts = $state<Map<ColumnId, SortMode>>(new Map());
-
-	function onSortColumn(colId: ColumnId, mode: SortMode) {
-		const next = new Map(columnSorts);
-		if (mode === 'default') {
-			next.delete(colId);
-		} else {
-			next.set(colId, mode);
-		}
-		columnSorts = next;
-	}
+	// Sort mode and grouping live on each ColumnDef (persisted config), not as
+	// separate local state — `columns` is the single source of truth.
+	const columnsById = $derived(new Map(columns.map((c) => [c.id, c])));
 
 	function onColumnDragStart(colId: string) {
 		dragColId = colId;
@@ -222,24 +218,27 @@
 
 	function cardsForColumn(columnId: ColumnId): PRCard[] {
 		const cols = filteredCards.filter((c) => c.columnId === columnId);
-		const mode = columnSorts.get(columnId);
-		if (!mode || mode === 'default') {
-			return cols.sort((a, b) => a.order - b.order);
-		}
-		switch (mode) {
-			case 'pr-asc':
-				return cols.sort((a, b) => a.prNumber - b.prNumber);
-			case 'pr-desc':
-				return cols.sort((a, b) => b.prNumber - a.prNumber);
-			case 'age-asc':
-				return cols.sort(
-					(a, b) => new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime()
-				);
-			case 'age-desc':
-				return cols.sort(
-					(a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-				);
-		}
+		const mode = columnsById.get(columnId)?.sortMode;
+		const sorted = (() => {
+			if (!mode || mode === 'default') {
+				return cols.sort((a, b) => a.order - b.order);
+			}
+			switch (mode) {
+				case 'pr-asc':
+					return cols.sort((a, b) => a.prNumber - b.prNumber);
+				case 'pr-desc':
+					return cols.sort((a, b) => b.prNumber - a.prNumber);
+				case 'age-asc':
+					return cols.sort(
+						(a, b) => new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime()
+					);
+				case 'age-desc':
+					return cols.sort(
+						(a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+					);
+			}
+		})();
+		return columnsById.get(columnId)?.grouped ? groupCardsByRepo(sorted) : sorted;
 	}
 
 	function orphanedCards(): PRCard[] {
@@ -342,10 +341,10 @@
 		if (dir === 'up' || dir === 'down') {
 			const columnId = nav.colIds[col];
 			if (columnId === '__orphaned__') return;
-			// Reorder writes card `order`; a column shown under an active sort ignores
-			// order, so the move would be an invisible no-op — skip it.
-			const mode = columnSorts.get(columnId);
-			if (mode && mode !== 'default') return;
+			// Reorder writes card `order`; a column shown under an active sort or
+			// grouping ignores order, so the move would be an invisible no-op — skip it.
+			const target = columnsById.get(columnId);
+			if ((target?.sortMode && target.sortMode !== 'default') || target?.grouped) return;
 			const cardIds = nav.grid[col];
 			if (dir === 'up') {
 				if (row === 0) return;
@@ -405,8 +404,8 @@
 		const { col, row } = pos;
 		const columnId = nav.colIds[col];
 		if (columnId === '__orphaned__') return;
-		const mode = columnSorts.get(columnId);
-		if (mode && mode !== 'default') return;
+		const target = columnsById.get(columnId);
+		if ((target?.sortMode && target.sortMode !== 'default') || target?.grouped) return;
 		const cardIds = nav.grid[col];
 		const id = focusedCardId;
 		if (dir === 'up') {
@@ -659,8 +658,10 @@
 					{showArchived}
 					onColumnDragStart={() => onColumnDragStart(col.id)}
 					onColumnDragEnd={onColumnDragEnd}
-					sortMode={columnSorts.get(col.id) ?? 'default'}
-					onSort={(mode) => onSortColumn(col.id, mode as SortMode)}
+					sortMode={col.sortMode ?? 'default'}
+					onSort={(mode) => onSortColumn(col.id, mode)}
+					grouped={col.grouped ?? false}
+					onToggleGroup={(g) => onToggleGroup(col.id, g)}
 					{focusedCardId}
 					{onSelectCard}
 					ciPopoverCardId={ciPopover?.card.id}

@@ -1,4 +1,4 @@
-import type { BoardConfig, AutomationRule, Signal } from "./types";
+import type { BoardConfig, AutomationRule, Signal, SortMode } from "./types";
 import { DEFAULT_CONFIG } from "./types";
 
 export type { BoardConfig };
@@ -61,5 +61,33 @@ export function setColumnWidth(config: BoardConfig, px: number): BoardConfig {
   return {
     ...config,
     columnWidthPx: Math.min(800, Math.max(200, px)),
+  };
+}
+
+export function setColumnSort(config: BoardConfig, id: string, mode: SortMode): BoardConfig {
+  return {
+    ...config,
+    columns: config.columns.map((c) => {
+      if (c.id !== id) return c;
+      if (mode === "default") {
+        const { sortMode: _sortMode, ...rest } = c;
+        return rest;
+      }
+      return { ...c, sortMode: mode };
+    }),
+  };
+}
+
+export function setColumnGrouped(config: BoardConfig, id: string, grouped: boolean): BoardConfig {
+  return {
+    ...config,
+    columns: config.columns.map((c) => {
+      if (c.id !== id) return c;
+      if (!grouped) {
+        const { grouped: _grouped, ...rest } = c;
+        return rest;
+      }
+      return { ...c, grouped: true };
+    }),
   };
 }
