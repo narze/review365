@@ -693,6 +693,58 @@ test.describe("Review365", () => {
     await expect(inboxColumn.getByText("Grouped by repo")).toBeHidden();
   });
 
+  test("grouped column: a repo cluster can be collapsed and expanded", async ({ page }) => {
+    const REPO2 = "test/other-repo";
+    await seedAuth(page, { enabledRepos: [REPO, REPO2] });
+    await mockGitHub(page, {
+      open: [ghItem(1, "Repo A first"), ghItem(2, "Repo A second")],
+    });
+    await page.route(`https://api.github.com/repos/${REPO2}/pulls*`, async (route) => {
+      await route.fulfill({
+        json: [
+          {
+            number: 1,
+            title: "Repo B first",
+            html_url: `https://github.com/${REPO2}/pull/1`,
+            updated_at: new Date().toISOString(),
+            user: { login: "someone" },
+            draft: false,
+            requested_reviewers: [],
+            head: { sha: "sha-other-1" },
+          },
+        ],
+      });
+    });
+
+    await page.goto("/", { waitUntil: "networkidle" });
+    const inboxColumn = page.getByRole("region", { name: "📥 Inbox" });
+
+    await inboxColumn.getByRole("button", { name: "📥 Inbox column options" }).click();
+    const panel = inboxColumn.getByRole("dialog");
+    await panel.getByRole("button", { name: "Group by repo" }).click();
+    await page.keyboard.press("Escape");
+
+    const repoAHeader = inboxColumn.getByRole("button", { name: `${REPO} · 2` });
+    await expect(repoAHeader).toBeVisible();
+    await expect(inboxColumn.getByText("Repo A first")).toBeVisible();
+    await expect(inboxColumn.getByText("Repo A second")).toBeVisible();
+
+    // Collapsing repo A's cluster hides its cards but leaves the header (with
+    // its count) and the other cluster untouched.
+    await repoAHeader.click();
+    await expect(repoAHeader).toHaveAttribute("aria-expanded", "false");
+    await expect(inboxColumn.getByText("Repo A first")).toBeHidden();
+    await expect(inboxColumn.getByText("Repo A second")).toBeHidden();
+    await expect(repoAHeader).toBeVisible();
+    await expect(inboxColumn.getByText("Repo B first")).toBeVisible();
+
+    // Expanding it again restores the cards.
+    await repoAHeader.click();
+    await expect(repoAHeader).toHaveAttribute("aria-expanded", "true");
+    await expect(inboxColumn.getByText("Repo A first")).toBeVisible();
+    await expect(inboxColumn.getByText("Repo A second")).toBeVisible();
+  });
+
   test("column options: sort and group by repo persist across a reload", async ({ page }) => {
     await seedAuth(page, { enabledRepos: [REPO] });
     await mockGitHub(page, {
@@ -710,6 +762,23 @@ test.describe("Review365", () => {
 
     await page.reload({ waitUntil: "networkidle" });
     await expect(inboxColumn.getByText("Sorted by PR number ↓ · Grouped by repo")).toBeVisible();
+
+    // Collapsing the repo cluster also persists.
+    const repoHeader = inboxColumn.getByRole("button", { name: `${REPO} · 3` });
+    await repoHeader.click();
+    await expect(repoHeader).toHaveAttribute("aria-expanded", "false");
+    await expect(inboxColumn.getByText("First PR")).toBeHidden();
+
+    await page.reload({ waitUntil: "networkidle" });
+    await expect(inboxColumn.getByRole("button", { name: `${REPO} · 3` })).toHaveAttribute(
+      "aria-expanded",
+      "false"
+    );
+    await expect(inboxColumn.getByText("First PR")).toBeHidden();
+
+    // Expanding it again persists too.
+    await inboxColumn.getByRole("button", { name: `${REPO} · 3` }).click();
+    await expect(inboxColumn.getByText("First PR")).toBeVisible();
 
     // Turning grouping back off also persists.
     await inboxColumn.getByRole("button", { name: "📥 Inbox column options" }).click();
