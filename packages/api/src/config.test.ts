@@ -9,6 +9,9 @@ import {
   deleteRule,
   createDefaultConfig,
   setColumnWidth,
+  setColumnSort,
+  setColumnGrouped,
+  toggleColumnRepoCollapse,
 } from "./config";
 
 function emptyConfig(): BoardConfig {
@@ -163,5 +166,104 @@ describe("setColumnWidth", () => {
     expect(setColumnWidth(config, 150).columnWidthPx).toBe(200);
     expect(setColumnWidth(config, 500).columnWidthPx).toBe(500);
     expect(setColumnWidth(config, 900).columnWidthPx).toBe(800);
+  });
+});
+
+describe("setColumnSort", () => {
+  function config(): BoardConfig {
+    return {
+      columns: [
+        { id: "inbox", title: "Inbox" },
+        { id: "approved", title: "Approved" },
+      ],
+      rules: [],
+    };
+  }
+
+  it("sets sortMode on the matching column only", () => {
+    const result = setColumnSort(config(), "inbox", "pr-desc");
+    expect(result.columns[0].sortMode).toBe("pr-desc");
+    expect(result.columns[1].sortMode).toBeUndefined();
+  });
+
+  it("omits sortMode when set to default, instead of storing it", () => {
+    const withSort = setColumnSort(config(), "inbox", "pr-desc");
+    const result = setColumnSort(withSort, "inbox", "default");
+    expect(result.columns[0].sortMode).toBeUndefined();
+    expect("sortMode" in result.columns[0]).toBe(false);
+  });
+
+  it("noops for unknown id", () => {
+    const result = setColumnSort(config(), "nonexistent", "pr-desc");
+    expect(result.columns[0].sortMode).toBeUndefined();
+    expect(result.columns[1].sortMode).toBeUndefined();
+  });
+});
+
+describe("setColumnGrouped", () => {
+  function config(): BoardConfig {
+    return {
+      columns: [
+        { id: "inbox", title: "Inbox" },
+        { id: "approved", title: "Approved" },
+      ],
+      rules: [],
+    };
+  }
+
+  it("sets grouped on the matching column only", () => {
+    const result = setColumnGrouped(config(), "inbox", true);
+    expect(result.columns[0].grouped).toBe(true);
+    expect(result.columns[1].grouped).toBeUndefined();
+  });
+
+  it("omits grouped when set to false, instead of storing it", () => {
+    const withGroup = setColumnGrouped(config(), "inbox", true);
+    const result = setColumnGrouped(withGroup, "inbox", false);
+    expect(result.columns[0].grouped).toBeUndefined();
+    expect("grouped" in result.columns[0]).toBe(false);
+  });
+
+  it("noops for unknown id", () => {
+    const result = setColumnGrouped(config(), "nonexistent", true);
+    expect(result.columns[0].grouped).toBeUndefined();
+    expect(result.columns[1].grouped).toBeUndefined();
+  });
+});
+
+describe("toggleColumnRepoCollapse", () => {
+  function config(): BoardConfig {
+    return {
+      columns: [
+        { id: "inbox", title: "Inbox" },
+        { id: "approved", title: "Approved" },
+      ],
+      rules: [],
+    };
+  }
+
+  it("collapses a repo on the matching column only", () => {
+    const result = toggleColumnRepoCollapse(config(), "inbox", "a/one");
+    expect(result.columns[0].collapsedRepos).toEqual(["a/one"]);
+    expect(result.columns[1].collapsedRepos).toBeUndefined();
+  });
+
+  it("toggling the same repo again expands it, omitting the empty array", () => {
+    const collapsed = toggleColumnRepoCollapse(config(), "inbox", "a/one");
+    const result = toggleColumnRepoCollapse(collapsed, "inbox", "a/one");
+    expect(result.columns[0].collapsedRepos).toBeUndefined();
+    expect("collapsedRepos" in result.columns[0]).toBe(false);
+  });
+
+  it("tracks multiple collapsed repos independently, sorted", () => {
+    const first = toggleColumnRepoCollapse(config(), "inbox", "b/two");
+    const result = toggleColumnRepoCollapse(first, "inbox", "a/one");
+    expect(result.columns[0].collapsedRepos).toEqual(["a/one", "b/two"]);
+  });
+
+  it("noops for unknown id", () => {
+    const result = toggleColumnRepoCollapse(config(), "nonexistent", "a/one");
+    expect(result.columns[0].collapsedRepos).toBeUndefined();
+    expect(result.columns[1].collapsedRepos).toBeUndefined();
   });
 });

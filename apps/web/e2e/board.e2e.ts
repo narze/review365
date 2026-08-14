@@ -539,6 +539,338 @@ test.describe("Review365", () => {
     expect(await focusedId()).toBe(middle);
   });
 
+  test("keyboard: Shift+Arrow still reorders within a grouped column", async ({ page }) => {
+    await seedAuth(page, { enabledRepos: [REPO] });
+    await mockGitHub(page, {
+      open: [ghItem(1, "One PR"), ghItem(2, "Two PR"), ghItem(3, "Three PR")],
+    });
+
+    await page.goto("/", { waitUntil: "networkidle" });
+    const inboxColumn = page.getByRole("region", { name: "📥 Inbox" });
+    const orderOf = () =>
+      inboxColumn
+        .locator("[data-card-id]")
+        .evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.cardId ?? null));
+    const focusedId = () =>
+      page.evaluate(() => document.activeElement?.getAttribute("data-card-id") ?? null);
+
+    await expect.poll(() => orderOf().then((ids) => ids.length)).toBe(3);
+    const before = await orderOf();
+
+    await inboxColumn.getByRole("button", { name: "📥 Inbox column options" }).click();
+    await inboxColumn.getByRole("dialog").getByRole("button", { name: "Group by repo" }).click();
+    await page.keyboard.press("Escape");
+    await expect(inboxColumn.getByText("Grouped by repo")).toBeVisible();
+
+    // A single watched repo is a single cluster: groupCardsByRepo keeps its
+    // cards in `order`, so reorder within it is still visible -- same as
+    // mouse drag, which never blocks on grouping either.
+    await inboxColumn.locator("[data-card-id]").first().click();
+    expect(await focusedId()).toBe(before[0]);
+    await page.keyboard.press("Shift+ArrowDown");
+    await expect.poll(orderOf).toEqual([before[1], before[0], before[2]]);
+    expect(await focusedId()).toBe(before[0]);
+
+    // Ctrl+Shift+Down (move-to-edge) goes through the same eligibility check.
+    await page.keyboard.press("ControlOrMeta+Shift+ArrowDown");
+    await expect.poll(orderOf).toEqual([before[1], before[2], before[0]]);
+  });
+
+  test("column list: copies visible cards as a Markdown list", async ({ page, context }) => {
+    await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+    await seedAuth(page, { enabledRepos: [REPO] });
+    await mockGitHub(page, {
+      open: [ghItem(1, "First PR"), ghItem(2, "Second PR")],
+    });
+
+    await page.goto("/", { waitUntil: "networkidle" });
+    const inboxColumn = page.getByRole("region", { name: "📥 Inbox" });
+    await inboxColumn.getByRole("button", { name: "📥 Inbox column options" }).click();
+    await inboxColumn.getByRole("button", { name: /Copy list/ }).click();
+
+    await expect
+      .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+      .toBe(
+        "- [test/repo#1](https://github.com/test/repo/pull/1) - First PR\n" +
+          "- [test/repo#2](https://github.com/test/repo/pull/2) - Second PR",
+      );
+    // The panel closes after the action and the header reports what happened.
+    await expect(inboxColumn.getByRole("dialog")).toBeHidden();
+    await expect(inboxColumn.getByText("Copied 2 cards as Markdown")).toBeVisible();
+  });
+
+  test("column options: sorting stays open so sorts can be compared", async ({ page }) => {
+    await seedAuth(page, { enabledRepos: [REPO] });
+    await mockGitHub(page, {
+      open: [ghItem(1, "First PR"), ghItem(2, "Second PR"), ghItem(3, "Third PR")],
+    });
+
+    await page.goto("/", { waitUntil: "networkidle" });
+    const inboxColumn = page.getByRole("region", { name: "📥 Inbox" });
+    const orderOf = () =>
+      inboxColumn
+        .locator("[data-card-id]")
+        .evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.cardId ?? null));
+
+    await expect.poll(orderOf).toEqual(["pr_test_repo_1", "pr_test_repo_2", "pr_test_repo_3"]);
+
+    await inboxColumn.getByRole("button", { name: "📥 Inbox column options" }).click();
+    const panel = inboxColumn.getByRole("dialog");
+    await expect(panel).toBeVisible();
+
+    await panel.getByRole("button", { name: /PR number ↓/ }).click();
+    await expect.poll(orderOf).toEqual(["pr_test_repo_3", "pr_test_repo_2", "pr_test_repo_1"]);
+    // Still open: the point of the panel is trying sorts against the live column.
+    await expect(panel).toBeVisible();
+
+    await panel.getByRole("button", { name: /PR number ↑/ }).click();
+    await expect.poll(orderOf).toEqual(["pr_test_repo_1", "pr_test_repo_2", "pr_test_repo_3"]);
+
+    // Escape closes it, and the active sort stays readable in the header.
+    await page.keyboard.press("Escape");
+    await expect(panel).toBeHidden();
+    await expect(inboxColumn.getByText("Sorted by PR number ↑")).toBeVisible();
+
+    // Reset returns the column to drag order.
+    await inboxColumn.getByRole("button", { name: "📥 Inbox column options" }).click();
+    await panel.getByRole("button", { name: "Reset" }).click();
+    await expect(inboxColumn.getByText(/Sorted by/)).toBeHidden();
+  });
+
+  test("column options: closing the panel with Escape doesn't break keyboard reorder", async ({
+    page,
+  }) => {
+    // Regression: the board's own Escape handler clears the focused card
+    // (for "deselect") on every Escape keypress — including one that only
+    // closed the column's options panel. That silently broke Shift+↑/↓
+    // until the card was refocused with a plain arrow key.
+    await seedAuth(page, { enabledRepos: [REPO] });
+    await mockGitHub(page, {
+      open: [ghItem(1, "First PR"), ghItem(2, "Second PR"), ghItem(3, "Third PR")],
+    });
+
+    await page.goto("/", { waitUntil: "networkidle" });
+    const inboxColumn = page.getByRole("region", { name: "📥 Inbox" });
+    const orderOf = () =>
+      inboxColumn
+        .locator("[data-card-id]")
+        .evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.cardId ?? null));
+
+    await expect.poll(orderOf).toEqual(["pr_test_repo_1", "pr_test_repo_2", "pr_test_repo_3"]);
+
+    // Focus the first card, then open and close the options panel — a plain
+    // open/close, not touching Sort or Group — via Escape.
+    await page.keyboard.press("ArrowDown");
+    await inboxColumn.getByRole("button", { name: "📥 Inbox column options" }).click();
+    const panel = inboxColumn.getByRole("dialog");
+    await expect(panel).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(panel).toBeHidden();
+
+    // The card is still the focused one, so Shift+ArrowDown still reorders it.
+    await page.keyboard.press("Shift+ArrowDown");
+    await expect.poll(orderOf).toEqual(["pr_test_repo_2", "pr_test_repo_1", "pr_test_repo_3"]);
+  });
+
+  test("column options: group by repo clusters cards and can be turned off", async ({ page }) => {
+    const REPO2 = "test/other-repo";
+    await seedAuth(page, { enabledRepos: [REPO, REPO2] });
+    await mockGitHub(page, {
+      open: [ghItem(1, "Repo A first"), ghItem(2, "Repo A second")],
+    });
+    // A second, narrower route for REPO2 — registered after mockGitHub's
+    // catch-all, so Playwright matches it first without touching the shared
+    // helper (which only knows about REPO).
+    await page.route(`https://api.github.com/repos/${REPO2}/pulls*`, async (route) => {
+      await route.fulfill({
+        json: [
+          {
+            number: 1,
+            title: "Repo B first",
+            html_url: `https://github.com/${REPO2}/pull/1`,
+            updated_at: new Date().toISOString(),
+            user: { login: "someone" },
+            draft: false,
+            requested_reviewers: [],
+            head: { sha: "sha-other-1" },
+          },
+        ],
+      });
+    });
+
+    await page.goto("/", { waitUntil: "networkidle" });
+    const inboxColumn = page.getByRole("region", { name: "📥 Inbox" });
+    const orderOf = () =>
+      inboxColumn
+        .locator("[data-card-id]")
+        .evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.cardId ?? null));
+
+    await expect.poll(() => orderOf().then((ids) => ids.length)).toBe(3);
+
+    await inboxColumn.getByRole("button", { name: "📥 Inbox column options" }).click();
+    const panel = inboxColumn.getByRole("dialog");
+    await panel.getByRole("button", { name: "Group by repo" }).click();
+
+    // Cluster labels combine repo + count; plain repo text alone also
+    // appears inside every card, so match the combined label to stay strict.
+    await expect(inboxColumn.getByText(`${REPO} · 2`)).toBeVisible();
+    await expect(inboxColumn.getByText(`${REPO2} · 1`)).toBeVisible();
+    // Card ids: `pr_${repo.replaceAll("/", "_")}_${number}` (only `/` is
+    // replaced), so "test/other-repo" PR #1 is "pr_test_other-repo_1".
+    // "test/other-repo" sorts before "test/repo" ('o' < 'r').
+    await expect
+      .poll(orderOf)
+      .toEqual(["pr_test_other-repo_1", "pr_test_repo_1", "pr_test_repo_2"]);
+
+    await page.keyboard.press("Escape");
+    await expect(inboxColumn.getByText("Grouped by repo")).toBeVisible();
+
+    await inboxColumn.getByRole("button", { name: "📥 Inbox column options" }).click();
+    await panel.getByRole("button", { name: "Group by repo" }).click();
+    await expect(inboxColumn.getByText("Grouped by repo")).toBeHidden();
+  });
+
+  test("grouped column: a repo cluster can be collapsed and expanded", async ({ page }) => {
+    const REPO2 = "test/other-repo";
+    await seedAuth(page, { enabledRepos: [REPO, REPO2] });
+    await mockGitHub(page, {
+      open: [ghItem(1, "Repo A first"), ghItem(2, "Repo A second")],
+    });
+    await page.route(`https://api.github.com/repos/${REPO2}/pulls*`, async (route) => {
+      await route.fulfill({
+        json: [
+          {
+            number: 1,
+            title: "Repo B first",
+            html_url: `https://github.com/${REPO2}/pull/1`,
+            updated_at: new Date().toISOString(),
+            user: { login: "someone" },
+            draft: false,
+            requested_reviewers: [],
+            head: { sha: "sha-other-1" },
+          },
+        ],
+      });
+    });
+
+    await page.goto("/", { waitUntil: "networkidle" });
+    const inboxColumn = page.getByRole("region", { name: "📥 Inbox" });
+
+    await inboxColumn.getByRole("button", { name: "📥 Inbox column options" }).click();
+    const panel = inboxColumn.getByRole("dialog");
+    await panel.getByRole("button", { name: "Group by repo" }).click();
+    await page.keyboard.press("Escape");
+
+    const repoAHeader = inboxColumn.getByRole("button", { name: `${REPO} · 2` });
+    await expect(repoAHeader).toBeVisible();
+    await expect(inboxColumn.getByText("Repo A first")).toBeVisible();
+    await expect(inboxColumn.getByText("Repo A second")).toBeVisible();
+
+    // Collapsing repo A's cluster hides its cards but leaves the header (with
+    // its count) and the other cluster untouched.
+    await repoAHeader.click();
+    await expect(repoAHeader).toHaveAttribute("aria-expanded", "false");
+    await expect(inboxColumn.getByText("Repo A first")).toBeHidden();
+    await expect(inboxColumn.getByText("Repo A second")).toBeHidden();
+    await expect(repoAHeader).toBeVisible();
+    await expect(inboxColumn.getByText("Repo B first")).toBeVisible();
+
+    // Expanding it again restores the cards.
+    await repoAHeader.click();
+    await expect(repoAHeader).toHaveAttribute("aria-expanded", "true");
+    await expect(inboxColumn.getByText("Repo A first")).toBeVisible();
+    await expect(inboxColumn.getByText("Repo A second")).toBeVisible();
+  });
+
+  test("column options: sort and group by repo persist across a reload", async ({ page }) => {
+    await seedAuth(page, { enabledRepos: [REPO] });
+    await mockGitHub(page, {
+      open: [ghItem(1, "First PR"), ghItem(2, "Second PR"), ghItem(3, "Third PR")],
+    });
+
+    await page.goto("/", { waitUntil: "networkidle" });
+    const inboxColumn = page.getByRole("region", { name: "📥 Inbox" });
+
+    await inboxColumn.getByRole("button", { name: "📥 Inbox column options" }).click();
+    const panel = inboxColumn.getByRole("dialog");
+    await panel.getByRole("button", { name: /PR number ↓/ }).click();
+    await panel.getByRole("button", { name: "Group by repo" }).click();
+    await expect(inboxColumn.getByText("Sorted by PR number ↓ · Grouped by repo")).toBeVisible();
+
+    await page.reload({ waitUntil: "networkidle" });
+    await expect(inboxColumn.getByText("Sorted by PR number ↓ · Grouped by repo")).toBeVisible();
+
+    // Collapsing the repo cluster also persists.
+    const repoHeader = inboxColumn.getByRole("button", { name: `${REPO} · 3` });
+    await repoHeader.click();
+    await expect(repoHeader).toHaveAttribute("aria-expanded", "false");
+    await expect(inboxColumn.getByText("First PR")).toBeHidden();
+
+    await page.reload({ waitUntil: "networkidle" });
+    await expect(inboxColumn.getByRole("button", { name: `${REPO} · 3` })).toHaveAttribute(
+      "aria-expanded",
+      "false"
+    );
+    await expect(inboxColumn.getByText("First PR")).toBeHidden();
+
+    // Expanding it again persists too.
+    await inboxColumn.getByRole("button", { name: `${REPO} · 3` }).click();
+    await expect(inboxColumn.getByText("First PR")).toBeVisible();
+
+    // Turning grouping back off also persists.
+    await inboxColumn.getByRole("button", { name: "📥 Inbox column options" }).click();
+    await panel.getByRole("button", { name: "Group by repo" }).click();
+    await expect(inboxColumn.getByText("Sorted by PR number ↓")).toBeVisible();
+    await expect(inboxColumn.getByText(/Grouped by repo/)).toBeHidden();
+
+    await page.reload({ waitUntil: "networkidle" });
+    await expect(inboxColumn.getByText("Sorted by PR number ↓")).toBeVisible();
+    await expect(inboxColumn.getByText(/Grouped by repo/)).toBeHidden();
+  });
+
+  test("text filter: narrows cards by title, author, and PR number", async ({ page }) => {
+    await seedAuth(page, { enabledRepos: [REPO] });
+    await mockGitHub(page, {
+      open: [
+        ghItem(1, "Add login page", { author: "alice" }),
+        ghItem(2, "Fix logout bug", { author: "bob" }),
+      ],
+    });
+    await page.goto("/", { waitUntil: "networkidle" });
+
+    await expect(page.getByText("Add login page")).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText("Fix logout bug")).toBeVisible();
+
+    const filter = page.getByRole("searchbox", { name: "Filter cards by text" });
+
+    // Title match keeps only the login card.
+    await filter.fill("login");
+    await expect(page.getByText("Add login page")).toBeVisible();
+    await expect(page.getByText("Fix logout bug")).toBeHidden();
+    await expect(page.getByText(/1 of 2 PRs match/)).toBeVisible();
+
+    // Author match keeps only bob's card.
+    await filter.fill("bob");
+    await expect(page.getByText("Fix logout bug")).toBeVisible();
+    await expect(page.getByText("Add login page")).toBeHidden();
+
+    // PR number match (with a leading #) keeps only PR 1.
+    await filter.fill("#1");
+    await expect(page.getByText("Add login page")).toBeVisible();
+    await expect(page.getByText("Fix logout bug")).toBeHidden();
+
+    // A query that matches nothing shows the empty-state hint.
+    await filter.fill("zzznomatch");
+    await expect(page.getByText(/No cards match/)).toBeVisible();
+    await expect(page.getByText("Add login page")).toBeHidden();
+
+    // Clearing via the search box's ✕ restores every card.
+    await filter.locator("xpath=following-sibling::button").click();
+    await expect(filter).toHaveValue("");
+    await expect(page.getByText("Add login page")).toBeVisible();
+    await expect(page.getByText("Fix logout bug")).toBeVisible();
+  });
+
   test("export excludes token, import restores board", async ({ page }) => {
     await seedAuth(page, { enabledRepos: [REPO] });
     await mockGitHub(page);

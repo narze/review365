@@ -1,7 +1,7 @@
 <script lang="ts">
 	import KanbanBoard from '../components/KanbanBoard.svelte';
 	import { onMount } from 'svelte';
-	import type { PRCard, ColumnId, ColumnDef, Signal, Platform } from '@review365/api/types';
+	import type { PRCard, ColumnId, ColumnDef, Signal, SortMode, Platform } from '@review365/api/types';
 	import { DEFAULT_CONFIG } from '@review365/api/types';
 	import { hasToken, getPlatform, getLogin, setPlatform } from '$lib/auth';
 	import {
@@ -318,6 +318,18 @@
 		await configService.setColumnWidth(px);
 	}
 
+	async function onSortColumn(id: string, mode: SortMode) {
+		applyConfig(await configService.setColumnSort(id, mode));
+	}
+
+	async function onToggleGroup(id: string, grouped: boolean) {
+		applyConfig(await configService.setColumnGrouped(id, grouped));
+	}
+
+	async function onToggleGroupCollapse(id: string, repo: string) {
+		applyConfig(await configService.toggleColumnRepoCollapse(id, repo));
+	}
+
 	function onSignOut() {
 		signedIn = false;
 		login = null;
@@ -429,6 +441,9 @@
 		{onSetRetention}
 		{columnWidthPx}
 		{onSetColumnWidth}
+		{onSortColumn}
+		{onToggleGroup}
+		{onToggleGroupCollapse}
 		{onSignOut}
 		{platform}
 		{login}

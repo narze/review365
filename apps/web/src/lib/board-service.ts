@@ -20,9 +20,12 @@ import {
   addRule,
   deleteRule,
   setColumnWidth,
+  setColumnSort,
+  setColumnGrouped,
+  toggleColumnRepoCollapse,
 } from "@review365/api/config";
 import { SIGNAL_LABELS } from "@review365/api/types";
-import type { BoardState, ColumnId, PRCard, Signal } from "@review365/api/types";
+import type { BoardState, ColumnId, PRCard, Signal, SortMode } from "@review365/api/types";
 import type { BoardConfig } from "@review365/api/config";
 import { boardStore, configStore, loadBoardState, loadBoardConfig } from "./local-store";
 import { getToken, getLogin, getHost, getPlatform } from "./auth";
@@ -186,4 +189,9 @@ export const config = {
   setRetention: (days: number) =>
     mutateConfig((c) => ({ ...c, mergedRetentionDays: Math.min(90, Math.max(1, days)) })),
   setColumnWidth: (px: number) => mutateConfig((c) => setColumnWidth(c, px)),
+  setColumnSort: (id: string, mode: SortMode) => mutateConfig((c) => setColumnSort(c, id, mode)),
+  setColumnGrouped: (id: string, grouped: boolean) =>
+    mutateConfig((c) => setColumnGrouped(c, id, grouped)),
+  toggleColumnRepoCollapse: (id: string, repo: string) =>
+    mutateConfig((c) => toggleColumnRepoCollapse(c, id, repo)),
 };
