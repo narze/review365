@@ -435,6 +435,16 @@
 			{/if}
 		</button>
 		<button
+			class="btn-secondary relative px-2.5 py-1.5 text-sm text-heading sm:px-3 {showActivity ? 'border-blue-500' : ''}"
+			onclick={openActivity}
+			aria-label="Activity"
+		>
+			🕘<span class="hidden sm:inline"> Activity</span>
+			{#if hasUnseenActivity}
+				<span class="absolute right-1 top-1 h-2 w-2 rounded-full bg-blue-500" aria-label="New activity"></span>
+			{/if}
+		</button>
+		<button
 			class="btn-secondary px-2.5 py-1.5 text-sm text-heading disabled:opacity-40 sm:px-3"
 			disabled={refreshing}
 			onclick={handleRefresh}
