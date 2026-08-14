@@ -152,6 +152,19 @@
 		dropColBefore = (e.clientX - rect.left) < rect.width / 2;
 	}
 
+	// The drop-slot gap opening/closing shifts columns sideways, which can
+	// push the very column being hovered out from under a stationary
+	// pointer and fire a spurious dragleave — clearing dropColTarget,
+	// closing the gap, shifting the column back under the pointer, and
+	// reopening it, forever. Only clear when the pointer has actually left
+	// the whole column track (mirrors KanbanColumn's card-level guard).
+	function handleColumnDragLeave(e: DragEvent, colId: string) {
+		if (dropColTarget !== colId) return;
+		const rt = e.relatedTarget as HTMLElement | null;
+		if (rt?.closest('.column-track')) return;
+		dropColTarget = null;
+	}
+
 	function handleColumnDrop(e: DragEvent, colId: string) {
 		e.preventDefault();
 		const srcId = e.dataTransfer?.getData('application/column-id');
@@ -652,7 +665,7 @@
 		</div>
 	{/if}
 {:else}
-	<div class="thin-scrollbar flex min-h-[calc(100vh-65px)] items-start gap-4 overflow-x-auto p-6">
+	<div class="column-track thin-scrollbar flex min-h-[calc(100vh-65px)] items-start gap-4 overflow-x-auto p-6">
 		{#each columns as col (col.id)}
 			<div class="flex items-start gap-4" animate:flip={{ duration: 300 }}>
 				{#if dropColTarget === col.id && dropColBefore && col.id !== dragColId}
@@ -665,9 +678,7 @@
 				<div
 					role="presentation"
 					ondragover={(e) => handleColumnDragOver(e, col.id)}
-					ondragleave={() => {
-						if (dropColTarget === col.id) dropColTarget = null;
-					}}
+					ondragleave={(e) => handleColumnDragLeave(e, col.id)}
 					ondrop={(e) => handleColumnDrop(e, col.id)}
 					class="rounded-xl"
 				>
