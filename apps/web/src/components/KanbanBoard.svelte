@@ -10,7 +10,8 @@
 	import { SvelteMap } from 'svelte/reactivity';
 	import { tick } from 'svelte';
 	import { getTheme, setTheme, type Theme } from '$lib/theme';
-	import { nextCardId, columnEdgeId, type Dir } from '$lib/card-navigation';
+	import type { Dir } from '$lib/card-navigation';
+	import { createBoardNav, type NavResult } from '$lib/board-nav';
 	import { cardMatchesQuery } from '$lib/card-filter';
 	import { groupCardsByRepo } from '$lib/card-grouping';
 	import type { ActivityEvent } from '$lib/activity';
@@ -261,13 +262,16 @@
 
 	// --- Keyboard navigation -------------------------------------------------
 
+	// Synthetic column id for the orphaned-cards bucket rendered below (also
+	// used in the template and the `nav` grid).
+	const ORPHANED_COLUMN_ID = '__orphaned__';
+
 	let focusedCardId = $state<string | null>(null);
 
-	// Remembers where a card sat before a keyboard column-move, so moving it back
-	// drops it into its old slot instead of the end. Keyed by card id; `beforeId`
-	// is the card it used to sit above (null = it was last). Plain memory, not
-	// reactive — it only informs the next move.
-	const returnSlots = new Map<string, { column: ColumnId; beforeId: string | null }>();
+	// Owns the returnSlots memory (where a card sat before a keyboard
+	// column-move) privately; decides focus/reorder outcomes for a grid + a
+	// direction. No DOM, no board state — see $lib/board-nav.
+	const boardNav = createBoardNav();
 
 	const ARROW: Record<string, Dir> = {
 		ArrowUp: 'up',
@@ -290,7 +294,7 @@
 		const orph = vis(orphanedCards()).map((c) => c.id);
 		if (orph.length) {
 			grid.push(orph);
-			colIds.push('__orphaned__');
+			colIds.push(ORPHANED_COLUMN_ID);
 		}
 		return { grid, colIds };
 	});
@@ -336,66 +340,32 @@
 		el.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
 	}
 
-	function focusPos(): { col: number; row: number } | null {
-		if (!focusedCardId) return null;
-		for (let c = 0; c < nav.grid.length; c++) {
-			const r = nav.grid[c].indexOf(focusedCardId);
-			if (r >= 0) return { col: c, row: r };
-		}
-		return null;
+	// Reorder writes card `order`; a column shown under an active sort ignores
+	// order, so a same-column reorder would be an invisible no-op — refuse
+	// those. Grouping alone doesn't: groupCardsByRepo clusters by repo but
+	// keeps each cluster's cards in `order`, so a same-column reorder is still
+	// visible there (as it already is via mouse drag, which never blocks on
+	// either). A cross-column move is never a no-op (the card visibly changes
+	// column), so it's only refused for the synthetic orphaned bucket.
+	function isReorderable(colId: string): boolean {
+		if (colId === ORPHANED_COLUMN_ID) return false;
+		const col = columnsById.get(colId);
+		return !(col?.sortMode && col.sortMode !== 'default');
 	}
 
-	async function moveFocusedCard(dir: Dir) {
-		const pos = focusPos();
-		if (!pos || !focusedCardId) return;
-		const { col, row } = pos;
-		const id = focusedCardId;
+	function canReceiveCard(colId: string): boolean {
+		return colId !== ORPHANED_COLUMN_ID;
+	}
 
-		if (dir === 'up' || dir === 'down') {
-			const columnId = nav.colIds[col];
-			if (columnId === '__orphaned__') return;
-			// Reorder writes card `order`; a column shown under an active sort or
-			// grouping ignores order, so the move would be an invisible no-op — skip it.
-			const target = columnsById.get(columnId);
-			if ((target?.sortMode && target.sortMode !== 'default') || target?.grouped) return;
-			const cardIds = nav.grid[col];
-			if (dir === 'up') {
-				if (row === 0) return;
-				onReorderCard(id, cardIds[row - 1], columnId);
-			} else {
-				if (row >= cardIds.length - 1) return;
-				onReorderCard(id, cardIds[row + 2] ?? null, columnId);
-			}
-		} else {
-			const step = dir === 'left' ? -1 : 1;
-			const targetIdx = col + step;
-			if (targetIdx < 0 || targetIdx >= nav.colIds.length) return;
-			const targetColId = nav.colIds[targetIdx];
-			if (targetColId === '__orphaned__') return;
-
-			const originColId = nav.colIds[col];
-			const targetCol = nav.grid[targetIdx];
-			const remembered = returnSlots.get(id);
-
-			let targetCardId: string | null;
-			if (remembered && remembered.column === targetColId) {
-				// Returning to the column we just left → restore the old slot.
-				targetCardId =
-					remembered.beforeId && targetCol.includes(remembered.beforeId)
-						? remembered.beforeId
-						: null;
-				returnSlots.delete(id);
-			} else {
-				// Leaving a column → remember the card we sat above, and land at the
-				// same row in the target so the layout stays predictable.
-				returnSlots.set(id, { column: originColId, beforeId: nav.grid[col][row + 1] ?? null });
-				targetCardId = targetCol[row] ?? null;
-			}
-			onReorderCard(id, targetCardId, targetColId);
+	// Applies a board-nav result: performs the reorder it describes (if any),
+	// then focuses (and scrolls to) the card it names.
+	async function applyNav(result: NavResult | null) {
+		if (!result) return;
+		if ('reorder' in result) {
+			onReorderCard(result.reorder.cardId, result.reorder.targetCardId, result.reorder.column);
+			await tick();
 		}
-
-		await tick();
-		focusCard(id);
+		focusCard(result.focus);
 	}
 
 	// Clicking a card makes it the selection: move the ring here and take DOM
@@ -403,33 +373,6 @@
 	function onSelectCard(id: string) {
 		focusedCardId = id;
 		findCardEl(id)?.focus({ preventScroll: true });
-	}
-
-	function focusColumnEdge(dir: 'up' | 'down') {
-		const id = columnEdgeId(nav.grid, focusedCardId, dir === 'up' ? 'top' : 'bottom');
-		if (id) focusCard(id);
-	}
-
-	// Reorder the focused card to the very top / bottom of its column.
-	async function moveFocusedCardToEdge(dir: 'up' | 'down') {
-		const pos = focusPos();
-		if (!pos || !focusedCardId) return;
-		const { col, row } = pos;
-		const columnId = nav.colIds[col];
-		if (columnId === '__orphaned__') return;
-		const target = columnsById.get(columnId);
-		if ((target?.sortMode && target.sortMode !== 'default') || target?.grouped) return;
-		const cardIds = nav.grid[col];
-		const id = focusedCardId;
-		if (dir === 'up') {
-			if (row === 0) return;
-			onReorderCard(id, cardIds[0], columnId);
-		} else {
-			if (row >= cardIds.length - 1) return;
-			onReorderCard(id, null, columnId);
-		}
-		await tick();
-		focusCard(id);
 	}
 
 	function handleKeydown(e: KeyboardEvent) {
@@ -451,8 +394,11 @@
 		if (e.metaKey || e.ctrlKey) {
 			if ((dir === 'up' || dir === 'down') && focusedCardId) {
 				e.preventDefault();
-				if (e.shiftKey) moveFocusedCardToEdge(dir);
-				else focusColumnEdge(dir);
+				if (e.shiftKey) {
+					applyNav(boardNav.moveCardToEdge(nav.grid, nav.colIds, focusedCardId, dir, isReorderable));
+				} else {
+					applyNav(boardNav.focusColumnEdge(nav.grid, focusedCardId, dir));
+				}
 			}
 			return;
 		}
@@ -460,10 +406,11 @@
 		e.preventDefault();
 
 		if (e.shiftKey) {
-			moveFocusedCard(dir);
+			applyNav(
+				boardNav.moveCard(nav.grid, nav.colIds, focusedCardId, dir, isReorderable, canReceiveCard)
+			);
 		} else {
-			const next = nextCardId(nav.grid, focusedCardId, dir);
-			if (next) focusCard(next);
+			applyNav(boardNav.moveFocus(nav.grid, focusedCardId, dir));
 		}
 	}
 
@@ -688,7 +635,7 @@
 		{/each}
 		{#if orphanedCards().length > 0}
 			<KanbanColumn
-				col={{ id: '__orphaned__', title: '👻 Orphaned' }}
+				col={{ id: ORPHANED_COLUMN_ID, title: '👻 Orphaned' }}
 				width={columnWidthPx}
 				cards={orphanedCards()}
 				onDrop={onMoveCard}
