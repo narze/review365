@@ -165,23 +165,46 @@
 		dropColTarget = null;
 	}
 
-	function handleColumnDrop(e: DragEvent, colId: string) {
+	// The drop surface for column drags is the whole track, not the hovered
+	// column: the drop-slot is pointer-events: none, and opening it shifts
+	// columns sideways — often right out from under a stationary pointer —
+	// so at release the pointer is frequently over the slot (or the track)
+	// with no column underneath. Cancelling dragover here keeps the drop
+	// legal anywhere on the track; the drop then lands wherever the open
+	// gap shows, via the dropColTarget/dropColBefore state the per-column
+	// dragover handlers maintain. (Cards get the same catch-all from the
+	// column root element in KanbanColumn.svelte.)
+	function handleTrackDragOver(e: DragEvent) {
+		if (!e.dataTransfer?.types.includes('application/column-id')) return;
 		e.preventDefault();
+	}
+
+	// Must be cancelled for the same reason KanbanColumn cancels dragenter
+	// for card drags: opening a slot shifts a new element under a stationary
+	// pointer, and the dragenter fired at it — left uncancelled — voids the
+	// drag operation, so releasing yields no drop event at all.
+	function handleTrackDragEnter(e: DragEvent) {
+		if (!e.dataTransfer?.types.includes('application/column-id')) return;
+		e.preventDefault();
+	}
+
+	function handleTrackDrop(e: DragEvent) {
 		const srcId = e.dataTransfer?.getData('application/column-id');
-		if (!srcId || srcId === colId) return;
-		const idx = columns.findIndex((c) => c.id === colId);
-		let insertIdx = idx;
-		if (!dropColBefore && idx < columns.length - 1) insertIdx = idx + 1;
-		const reordered = [...columns];
-		const srcIdx = reordered.findIndex((c) => c.id === srcId);
-		if (srcIdx >= 0) {
-			const [moved] = reordered.splice(srcIdx, 1);
-			// adjust insertIdx if srcIdx was before it
-			if (srcIdx < insertIdx) insertIdx--;
-			reordered.splice(insertIdx, 0, moved);
+		if (!srcId) return;
+		e.preventDefault();
+		const idx = columns.findIndex((c) => c.id === dropColTarget);
+		if (dropColTarget !== srcId && idx >= 0) {
+			let insertIdx = dropColBefore ? idx : idx + 1;
+			const reordered = [...columns];
+			const srcIdx = reordered.findIndex((c) => c.id === srcId);
+			if (srcIdx >= 0) {
+				const [moved] = reordered.splice(srcIdx, 1);
+				// adjust insertIdx if srcIdx was before it
+				if (srcIdx < insertIdx) insertIdx--;
+				reordered.splice(insertIdx, 0, moved);
+				onReorderColumns(reordered.map((c) => c.id));
+			}
 		}
-		const ids = reordered.map((c) => c.id);
-		onReorderColumns(ids);
 		dropColTarget = null;
 		dragColId = null;
 		dragColHeight = 0;
@@ -665,7 +688,13 @@
 		</div>
 	{/if}
 {:else}
-	<div class="column-track thin-scrollbar flex min-h-[calc(100vh-65px)] items-start gap-4 overflow-x-auto p-6">
+	<div
+		class="column-track thin-scrollbar flex min-h-[calc(100vh-65px)] items-start gap-4 overflow-x-auto p-6"
+		role="presentation"
+		ondragenter={handleTrackDragEnter}
+		ondragover={handleTrackDragOver}
+		ondrop={handleTrackDrop}
+	>
 		{#each columns as col (col.id)}
 			<div class="flex items-start gap-4" animate:flip={{ duration: 300 }}>
 				{#if dropColTarget === col.id && dropColBefore && col.id !== dragColId}
@@ -679,7 +708,6 @@
 					role="presentation"
 					ondragover={(e) => handleColumnDragOver(e, col.id)}
 					ondragleave={(e) => handleColumnDragLeave(e, col.id)}
-					ondrop={(e) => handleColumnDrop(e, col.id)}
 					class="rounded-xl"
 				>
 					<KanbanColumn
