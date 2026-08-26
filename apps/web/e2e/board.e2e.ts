@@ -91,6 +91,15 @@ async function mockGitHub(
   });
 }
 
+// The card link points at real github.com. Serve it from the test instead of
+// the network, so the popup lands on the URL we assert rather than a
+// navigation error page. Routed on the context, since the popup is a new page.
+async function stubPRPages(page: Page) {
+  await page.context().route("https://github.com/**", async (route) => {
+    await route.fulfill({ contentType: "text/html", body: "<html><body>pr</body></html>" });
+  });
+}
+
 test.describe("Review365", () => {
   test("CI panel: closes after the pointer leaves the panel", async ({ page }) => {
     await seedAuth(page, { enabledRepos: [REPO] });
@@ -188,7 +197,7 @@ test.describe("Review365", () => {
     const panel = page.getByRole("dialog", { name: "Activity" });
     await expect(panel.getByText("test/repo #14")).toBeVisible();
     await expect(panel.getByText("Activity test PR")).toBeVisible();
-    await expect(panel.getByText("got a note")).toBeVisible();
+    await expect(panel.getByText("added a note")).toBeVisible();
 
     page.once("dialog", (dialog) => dialog.accept());
     await panel.getByRole("button", { name: "Clear" }).click();
@@ -332,6 +341,7 @@ test.describe("Review365", () => {
   test("keyboard: arrows move focus between cards and Enter opens the PR", async ({ page }) => {
     await seedAuth(page, { enabledRepos: [REPO] });
     await mockGitHub(page, { open: [ghItem(1, "First PR"), ghItem(2, "Second PR")] });
+    await stubPRPages(page);
 
     await page.goto("/", { waitUntil: "networkidle" });
     await page.locator("h1").waitFor({ state: "visible" });
@@ -360,6 +370,7 @@ test.describe("Review365", () => {
       page.waitForEvent("popup"),
       page.keyboard.press("Enter"),
     ]).then(([p]) => p);
+    await popup.waitForLoadState();
     expect(popup.url()).toContain(`/${REPO}/pull/`);
   });
 
