@@ -6,6 +6,7 @@
 	import ColumnManager from './ColumnManager.svelte';
 	import RuleManager from './RuleManager.svelte';
 	import AccountSettings from './AccountSettings.svelte';
+	import McpBridgeSettings from './McpBridgeSettings.svelte';
 	import ActivityPanel from './ActivityPanel.svelte';
 	import { SvelteMap } from 'svelte/reactivity';
 	import { tick } from 'svelte';
@@ -531,6 +532,7 @@
 			<AccountSettings {platform} {login} {onSignOut} {onImported} {onSwitchPlatform} />
 			<ColumnManager {columns} onAdd={onAddColumn} onRename={onRenameColumn} onDelete={onDeleteColumn} />
 			<RuleManager {columns} {rules} {signalLabels} onAdd={onAddRule} onDelete={onDeleteRule} />
+			<McpBridgeSettings />
 			<div class="flex items-center gap-3 rounded-lg border border-panel p-4">
 				<span class="text-sm text-body">Theme</span>
 				<div class="inline-flex rounded-md border border-control p-0.5">

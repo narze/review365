@@ -23,6 +23,8 @@
 		type ActivityState
 	} from '$lib/activity';
 	import { activityKey, loadActivityState, saveActivityState } from '$lib/activity-store';
+	import { buildBoardSnapshot } from '@review365/api/bridge';
+	import { startMcpBridge } from '$lib/mcp-bridge.svelte';
 
 	let signedIn = $state(hasToken());
 	let platform = $state<Platform>(getPlatform());
@@ -376,7 +378,18 @@
 		};
 		window.addEventListener('storage', syncActivity);
 
+		// Agent edits go through the same handlers as drag and drop, so the UI,
+		// localStorage and the activity log stay in step.
+		const stopMcpBridge = startMcpBridge({
+			snapshot: (opts) => buildBoardSnapshot(columns, cards, opts),
+			moveCard: (cardId, columnId, beforeCardId) => onReorderCard(cardId, beforeCardId, columnId),
+			archiveCard: onArchiveCard,
+			unarchiveCard: onUnarchiveCard,
+			setNote: onUpdateNote
+		});
+
 		return () => {
+			stopMcpBridge();
 			clearInterval(interval);
 			window.removeEventListener('online', goOnline);
 			window.removeEventListener('offline', goOffline);
