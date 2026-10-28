@@ -1,8 +1,6 @@
-import { test, expect, type Page } from "@playwright/test";
-import { startBridgeServer, type BridgeServer } from "../../../packages/mcp/src/bridge-server";
+import { test, expect, type APIRequestContext, type Page } from "@playwright/test";
 
 const REPO = "test/repo";
-const ORIGIN = "http://localhost:5173";
 
 function ghItem(n: number, title: string) {
   return {
@@ -17,7 +15,12 @@ function ghItem(n: number, title: string) {
   };
 }
 
-async function seed(page: Page, bridge: { enabled: boolean; port: number } | null) {
+/** A fresh token per test, so tests never reach each other's tabs through the relay. */
+function newToken() {
+  return `e2e-${crypto.randomUUID()}-${crypto.randomUUID()}`;
+}
+
+async function seed(page: Page, bridge: { enabled: boolean; token: string } | null) {
   await page.addInitScript(
     ({ repo, bridge }) => {
       localStorage.setItem("review365:token", "test-token");
@@ -41,39 +44,74 @@ async function seed(page: Page, bridge: { enabled: boolean; port: number } | nul
   });
 }
 
+/** Calls a tool on the MCP endpoint the way an HTTP MCP client does. */
+async function mcpCall(
+  request: APIRequestContext,
+  token: string,
+  name: string,
+  args: Record<string, unknown> = {},
+): Promise<{ isError: boolean; text: string }> {
+  const res = await request.post("/api/mcp", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/json, text/event-stream",
+      "Content-Type": "application/json",
+    },
+    data: { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: args } },
+  });
+  expect(res.status()).toBe(200);
+  const body = (await res.json()) as {
+    result: { isError?: boolean; content: { text: string }[] };
+  };
+  return { isError: !!body.result.isError, text: body.result.content.map((c) => c.text).join("") };
+}
+
+/** The tab connects in the background; wait until the relay reaches it. */
+async function waitForTab(request: APIRequestContext, token: string) {
+  await expect
+    .poll(async () => (await mcpCall(request, token, "get_board")).isError, { timeout: 10_000 })
+    .toBe(false);
+}
+
 const cardIdsIn = (page: Page, column: string) =>
   page
     .getByRole("region", { name: column })
     .locator("[data-card-id]")
     .evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.cardId ?? null));
 
-test.describe("MCP bridge", () => {
-  let bridge: BridgeServer;
-
-  test.beforeEach(async () => {
-    bridge = await startBridgeServer({ port: 0, allowedOrigins: [ORIGIN] });
+test.describe("MCP relay", () => {
+  test("rejects MCP calls without a pairing token", async ({ request }) => {
+    const res = await request.post("/api/mcp", {
+      headers: { "Content-Type": "application/json" },
+      data: { jsonrpc: "2.0", id: 1, method: "tools/list" },
+    });
+    expect(res.status()).toBe(401);
   });
 
-  test.afterEach(async () => {
-    await bridge.close();
-  });
-
-  test("an agent reads the board and moves, notes and archives cards", async ({ page }) => {
-    await seed(page, { enabled: true, port: bridge.port });
-    await page.goto("/", { waitUntil: "networkidle" });
+  test("an agent reads the board and moves, notes and archives cards", async ({
+    page,
+    request,
+  }) => {
+    const token = newToken();
+    await seed(page, { enabled: true, token });
+    // The open command stream keeps the network busy, so never wait for networkidle.
+    await page.goto("/");
     await expect(page.getByText("Two PR")).toBeVisible({ timeout: 5000 });
-    await expect.poll(() => bridge.isConnected()).toBe(true);
+    await waitForTab(request, token);
 
-    const board = (await bridge.call("get_board", {})) as {
-      columns: { id: string; cards: { id: string; title: string }[] }[];
+    const board = JSON.parse((await mcpCall(request, token, "get_board")).text) as {
+      columns: { id: string; cards: { title: string }[] }[];
     };
     const inbox = board.columns.find((c) => c.id === "inbox");
     expect(inbox?.cards.map((c) => c.title).sort()).toEqual(["One PR", "Two PR"]);
 
-    await bridge.call("move_card", { card_id: "pr_test_repo_1", column_id: "reviewing" });
+    await mcpCall(request, token, "move_card", {
+      card_id: "pr_test_repo_1",
+      column_id: "reviewing",
+    });
     await expect.poll(() => cardIdsIn(page, "👀 Reviewing")).toEqual(["pr_test_repo_1"]);
 
-    await bridge.call("move_card", {
+    await mcpCall(request, token, "move_card", {
       card_id: "pr_test_repo_2",
       column_id: "reviewing",
       before_card_id: "pr_test_repo_1",
@@ -82,10 +120,10 @@ test.describe("MCP bridge", () => {
       .poll(() => cardIdsIn(page, "👀 Reviewing"))
       .toEqual(["pr_test_repo_2", "pr_test_repo_1"]);
 
-    await bridge.call("set_note", { card_id: "pr_test_repo_1", note: "Ping author" });
+    await mcpCall(request, token, "set_note", { card_id: "pr_test_repo_1", note: "Ping author" });
     await expect(page.getByRole("button", { name: "Ping author" })).toBeVisible();
 
-    await bridge.call("archive_card", { card_id: "pr_test_repo_2" });
+    await mcpCall(request, token, "archive_card", { card_id: "pr_test_repo_2" });
     await expect.poll(() => cardIdsIn(page, "👀 Reviewing")).toEqual(["pr_test_repo_1"]);
 
     // Edits land in localStorage like a manual edit. (A reload would re-run the seed script.)
@@ -96,40 +134,70 @@ test.describe("MCP bridge", () => {
     expect(saved.pr_test_repo_2).toMatchObject({ column: "reviewing", archived: true });
   });
 
-  test("an invalid call returns an error and changes nothing", async ({ page }) => {
-    await seed(page, { enabled: true, port: bridge.port });
-    await page.goto("/", { waitUntil: "networkidle" });
+  test("an invalid call returns an error and changes nothing", async ({ page, request }) => {
+    const token = newToken();
+    await seed(page, { enabled: true, token });
+    // The open command stream keeps the network busy, so never wait for networkidle.
+    await page.goto("/");
     await expect(page.getByText("Two PR")).toBeVisible({ timeout: 5000 });
-    await expect.poll(() => bridge.isConnected()).toBe(true);
+    await waitForTab(request, token);
 
-    await expect(
-      bridge.call("move_card", { card_id: "pr_test_repo_1", column_id: "nope" }),
-    ).rejects.toThrow("Unknown column: nope");
+    const res = await mcpCall(request, token, "move_card", {
+      card_id: "pr_test_repo_1",
+      column_id: "nope",
+    });
+    expect(res).toEqual({ isError: true, text: "Unknown column: nope" });
     expect((await cardIdsIn(page, "📥 Inbox")).length).toBe(2);
   });
 
-  test("the bridge is off by default and toggles from Settings", async ({ page }) => {
+  test("access is off by default and pairs from Settings", async ({ page, request }) => {
     await seed(page, null);
     await page.goto("/", { waitUntil: "networkidle" });
     await expect(page.getByText("Two PR")).toBeVisible({ timeout: 5000 });
-    expect(bridge.isConnected()).toBe(false);
 
-    // The default port is not the test bridge's port, so point the tab at it first.
-    await page.evaluate(
-      (port) =>
-        localStorage.setItem("review365:mcp-bridge", JSON.stringify({ enabled: false, port })),
-      bridge.port,
-    );
     await page.locator("button", { hasText: "Settings" }).click();
-    const toggle = page.getByRole("checkbox", { name: "Connect to local MCP server" });
+    const toggle = page.getByRole("checkbox", { name: "Allow AI agents to edit this board" });
     await expect(toggle).not.toBeChecked();
 
     await toggle.check();
-    await expect.poll(() => bridge.isConnected()).toBe(true);
-    await expect(page.getByText("Connected", { exact: true })).toBeVisible();
+    await expect(page.getByText("Connected", { exact: true })).toBeVisible({ timeout: 10_000 });
+    const command = await page.getByTestId("mcp-add-command").textContent();
+    expect(command).toContain("claude mcp add --transport http review365");
+    expect(command).toContain("/api/mcp");
+    const token = /Bearer ([\w-]+)/.exec(command ?? "")?.[1] ?? "";
+    expect(token.length).toBeGreaterThanOrEqual(32);
+    expect((await mcpCall(request, token, "get_board")).isError).toBe(false);
+
+    // A new token cuts off the old one.
+    await page.getByRole("button", { name: "New token" }).click();
+    await expect(page.getByTestId("mcp-add-command")).not.toContainText(token);
+    await expect(page.getByText("Connected", { exact: true })).toBeVisible({ timeout: 10_000 });
+    expect((await mcpCall(request, token, "get_board")).isError).toBe(true);
 
     await toggle.uncheck();
-    await expect.poll(() => bridge.isConnected()).toBe(false);
-    await expect(page.getByText("Connected", { exact: true })).toBeHidden();
+    await expect(page.getByTestId("mcp-add-command")).toBeHidden();
+  });
+
+  test("only one tab answers when several are open", async ({ context, request }) => {
+    const token = newToken();
+    const first = await context.newPage();
+    const second = await context.newPage();
+    for (const page of [first, second]) {
+      await seed(page, { enabled: true, token });
+      await page.goto("/");
+      await expect(page.getByText("Two PR")).toBeVisible({ timeout: 5000 });
+    }
+    await waitForTab(request, token);
+    await mcpCall(request, token, "move_card", {
+      card_id: "pr_test_repo_1",
+      column_id: "reviewing",
+    });
+    // A tab only repaints for edits it ran itself, so exactly one tab shows the move.
+    const moved = async () =>
+      (await cardIdsIn(first, "👀 Reviewing")).length +
+      (await cardIdsIn(second, "👀 Reviewing")).length;
+    await expect.poll(moved).toBe(1);
+    await first.waitForTimeout(500);
+    expect(await moved()).toBe(1);
   });
 });
