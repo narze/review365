@@ -1,14 +1,17 @@
 # MCP server (let an agent move cards)
 
-`packages/mcp` is a local [MCP](https://modelcontextprotocol.io) server. It lets an AI agent
-(Claude Code, Cursor, and so on) read and edit the board that is open in your browser.
+review365 serves an [MCP](https://modelcontextprotocol.io) endpoint at `/api/mcp`. An AI agent
+(Claude Code, Cursor, and so on) can use it to read and edit the board that is open in your
+browser. Nothing runs on your machine except the browser tab.
 
-The board never leaves the browser. The MCP server runs on your machine and forwards each
-tool call over a WebSocket on `127.0.0.1:47365` to the open review365 tab. The tab runs the
-call against its own localStorage, the same way as a drag and drop.
+The board never leaves the browser. The server only relays: each tool call goes over Redis
+pub/sub to the paired tab's command stream, the tab runs it against its own localStorage the
+same way as a drag and drop, and the tab posts the result back. Pub/sub keeps no messages.
 
 ```
-agent ──stdio──▶ review365 MCP server ──ws://127.0.0.1:47365──▶ review365 tab (localStorage)
+agent ──HTTP──▶ /api/mcp ──Redis pub/sub──▶ /api/bridge/stream (SSE) ──▶ review365 tab
+                    ▲                                                        │
+                    └──────── Redis pub/sub ◀── /api/bridge/reply ◀──────────┘
 ```
 
 ## Tools
@@ -21,30 +24,33 @@ agent ──stdio──▶ review365 MCP server ──ws://127.0.0.1:47365──
 | `unarchive_card` | Bring an archived card back                                            |
 | `set_note`       | Set or clear (empty string) the note on a card, max 200 characters     |
 
-## Set up
+## Use it
 
-1. Install dependencies in this repo: `bun install`.
-2. Add the server to your agent. For Claude Code:
+1. Open review365, go to **Settings**, and turn on **Allow AI agents to edit this board**.
+2. Copy the command shown there and run it. It looks like this:
 
    ```bash
-   claude mcp add review365 \
-     -e REVIEW365_ORIGINS=https://your-review365.vercel.app \
-     -- bun /path/to/review365/packages/mcp/src/index.ts
+   claude mcp add --transport http review365 https://<your-app>/api/mcp \
+     --header "Authorization: Bearer <pairing token>"
    ```
 
-   `REVIEW365_ORIGINS` is a comma-separated list of the origins where you open review365.
-   `http://localhost:5173` is always allowed. The server refuses tabs from any other origin.
+3. Keep the tab open. When no tab is paired, tools return an error that says so.
 
-3. Open review365, go to **Settings**, and turn on **Connect to local MCP server**.
-   The status shows **Connected** while the agent's MCP server runs.
+The pairing token is made in your browser and links the agent to that browser's board.
+Anyone with the token can edit the board while the tab is open, so keep it secret. **New token**
+cuts off agents that use the old one.
 
-The tab must stay open. When it is closed, the tools return an error that tells the agent so.
+With several tabs open, only one tab (picked with the Web Locks API) answers.
 
-## Notes
+## Deploy (Vercel)
 
-- Chrome asks once for permission when a site on the internet connects to `localhost`
-  ("local network access"). Allow it for review365.
-- Only one MCP server can use the port. To run more than one, set `REVIEW365_MCP_PORT`
-  for the server and change `port` in the `review365:mcp-bridge` localStorage entry.
-- When more than one tab is connected, the most recently connected tab answers.
-- Agent edits show as "You" in the activity log.
+Vercel can run the MCP call and the tab's stream on different function instances, so they
+meet on Redis pub/sub. Add a Redis database to the project (for example Upstash or Redis
+Cloud from the Vercel Marketplace) and set `REDIS_URL` (a `redis://` or `rediss://` URL).
+Without it, the endpoints answer `503`.
+
+The command stream ends after 270 seconds and the tab reconnects at once, so it fits in the
+default function duration with Fluid compute. A shorter limit still works; the tab only
+reconnects more often.
+
+Local dev (`bun run dev`) uses an in-memory pub/sub when `REDIS_URL` is not set.

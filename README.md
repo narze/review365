@@ -34,8 +34,9 @@ from a [GitHub OAuth App](https://github.com/settings/developers). Callback URL:
 
 ### Let an agent move cards (MCP)
 
-Optional. Run the local MCP server in `packages/mcp` and turn on **Connect to local MCP server**
-in Settings. The board stays in your browser. See [docs/mcp.md](docs/mcp.md).
+Optional. Turn on **Allow AI agents to edit this board** in Settings and add the shown
+`claude mcp add` command. The board stays in your browser; on Vercel the relay needs
+`REDIS_URL`. See [docs/mcp.md](docs/mcp.md).
 
 ## Git Hooks and Formatting
 
@@ -51,7 +52,6 @@ review365/
 │   └── web/         # Fullstack application (SvelteKit)
 ├── packages/
 │   ├── api/         # API layer / business logic
-│   └── mcp/         # Local MCP server that bridges agents to the open board
 ```
 
 ## Available Scripts
