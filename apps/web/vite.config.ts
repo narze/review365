@@ -4,10 +4,11 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite-plus";
 import { githubOAuthDevPlugin } from "./vite-plugin-github-oauth";
+import { mcpRelayDevPlugin } from "./vite-plugin-mcp-relay";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
 export default defineConfig({
   envDir: rootDir,
-  plugins: [tailwindcss(), sveltekit(), githubOAuthDevPlugin()],
+  plugins: [tailwindcss(), sveltekit(), githubOAuthDevPlugin(), mcpRelayDevPlugin()],
 });

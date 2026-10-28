@@ -15,16 +15,14 @@ describe("github-oauth helpers", () => {
   test("getOAuthConfig requires both id and secret", () => {
     expect(getOAuthConfig({}).configured).toBe(false);
     expect(getOAuthConfig({ GITHUB_CLIENT_ID: "id" }).configured).toBe(false);
-    expect(
-      getOAuthConfig({ GITHUB_CLIENT_ID: "id", GITHUB_CLIENT_SECRET: "sec" }).configured,
-    ).toBe(true);
+    expect(getOAuthConfig({ GITHUB_CLIENT_ID: "id", GITHUB_CLIENT_SECRET: "sec" }).configured).toBe(
+      true,
+    );
   });
 
   test("getAppOrigin prefers APP_ORIGIN then VERCEL_URL then request origin", () => {
     const req = new URL("http://localhost:5173/api/auth/github/start");
-    expect(getAppOrigin(req, { APP_ORIGIN: "https://app.example/" })).toBe(
-      "https://app.example",
-    );
+    expect(getAppOrigin(req, { APP_ORIGIN: "https://app.example/" })).toBe("https://app.example");
     expect(getAppOrigin(req, { VERCEL_URL: "review365.vercel.app" })).toBe(
       "https://review365.vercel.app",
     );

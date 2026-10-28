@@ -1,8 +1,0 @@
-{
-  "extends": "@review365/config/tsconfig.base.json",
-  "compilerOptions": {
-    "types": ["node", "bun"],
-    "noEmit": true
-  },
-  "include": ["src"]
-}

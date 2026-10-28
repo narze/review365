@@ -1,6 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { NOTE_MAX_LENGTH, type BridgeTool } from "@review365/api/bridge";
+import type { BridgeTool } from "@review365/api/bridge";
 
 export type BridgeCall = (tool: BridgeTool, args: Record<string, unknown>) => Promise<unknown>;
 
@@ -72,7 +72,8 @@ export function createMcpServer(call: BridgeCall): McpServer {
     "set_note",
     {
       description: "Set the short note shown on a card. An empty string removes the note.",
-      inputSchema: { card_id: cardId, note: z.string().max(NOTE_MAX_LENGTH) },
+      // The tab enforces the 200-character limit (NOTE_MAX_LENGTH) and reports it as an error.
+      inputSchema: { card_id: cardId, note: z.string().describe("At most 200 characters") },
     },
     (args) => forward("set_note", args),
   );

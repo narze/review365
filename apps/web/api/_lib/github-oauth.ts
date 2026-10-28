@@ -15,9 +15,7 @@ export type OAuthConfig = {
   configured: boolean;
 };
 
-export function getOAuthConfig(
-  env: Record<string, string | undefined> = process.env,
-): OAuthConfig {
+export function getOAuthConfig(env: Record<string, string | undefined> = process.env): OAuthConfig {
   const clientId = env.GITHUB_CLIENT_ID?.trim() ?? "";
   const clientSecret = env.GITHUB_CLIENT_SECRET?.trim() ?? "";
   return {
@@ -48,11 +46,7 @@ export function callbackRedirectUri(origin: string): string {
   return `${origin.replace(/\/+$/, "")}/api/auth/github/callback`;
 }
 
-export function buildAuthorizeUrl(
-  clientId: string,
-  redirectUri: string,
-  state: string,
-): string {
+export function buildAuthorizeUrl(clientId: string, redirectUri: string, state: string): string {
   const url = new URL("https://github.com/login/oauth/authorize");
   url.searchParams.set("client_id", clientId);
   url.searchParams.set("redirect_uri", redirectUri);
