@@ -75,12 +75,12 @@ async function ghFetchAllPages<T>(token: string, path: string, maxPages = 10): P
   let nextUrl: string | null = path.startsWith("http") ? path : `${GITHUB_API}${path}`;
 
   for (let page = 0; page < maxPages && nextUrl; page++) {
-    const res = await fetch(nextUrl, { headers: headers(token) });
+    const res: Response = await fetch(nextUrl, { headers: headers(token) });
     if (!res.ok) throw new Error(`GitHub API ${res.status}: ${await res.text()}`);
     const batch = (await res.json()) as T[];
     if (batch.length === 0) break;
     items.push(...batch);
-    const link = res.headers.get("Link");
+    const link: string | null = res.headers.get("Link");
     nextUrl = link?.match(/<([^>]+)>;\s*rel="next"/)?.[1] ?? null;
   }
 
