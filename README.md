@@ -32,6 +32,11 @@ Optional. Copy `.env.example` to `.env` and set `GITHUB_CLIENT_ID` / `GITHUB_CLI
 from a [GitHub OAuth App](https://github.com/settings/developers). Callback URL:
 `http://localhost:5173/api/auth/github/callback`. See [docs/github-oauth.md](docs/github-oauth.md).
 
+### Let an agent move cards (MCP)
+
+Optional. Run the local MCP server in `packages/mcp` and turn on **Connect to local MCP server**
+in Settings. The board stays in your browser. See [docs/mcp.md](docs/mcp.md).
+
 ## Git Hooks and Formatting
 
 - Optional native Vite+ hooks: `bun run hooks:setup`
@@ -46,6 +51,7 @@ review365/
 │   └── web/         # Fullstack application (SvelteKit)
 ├── packages/
 │   ├── api/         # API layer / business logic
+│   └── mcp/         # Local MCP server that bridges agents to the open board
 ```
 
 ## Available Scripts
