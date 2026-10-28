@@ -26,7 +26,7 @@ jobs:
         run: bun run check-types
 
       - name: Unit tests
-        run: bun test --cwd packages/api
+        run: bun test --cwd packages/api && bun test --cwd packages/mcp
 
   e2e:
     name: E2E Tests
